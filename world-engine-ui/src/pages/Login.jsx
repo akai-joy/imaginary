@@ -1,0 +1,65 @@
+import { useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../auth'
+
+function GoogleGlyph() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
+      <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"/>
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+    </svg>
+  )
+}
+
+export default function Login() {
+  const { user, signInWithGoogle, continueDemo, firebaseEnabled } = useAuth()
+  const nav = useNavigate()
+  const loc = useLocation()
+  const dest = loc.state?.from?.pathname || '/'
+
+  useEffect(() => {
+    if (user) nav(dest, { replace: true })
+  }, [user, dest, nav])
+
+  return (
+    <div className="login">
+      <section className="login-hero">
+        <p className="eyebrow">A living, collaborative story world</p>
+        <h1 className="login-title">
+          Every character, faction, and plot you add becomes <em>canon</em> — and is traced
+          to whatever it grew from.
+        </h1>
+        <p className="login-sub">
+          Contribute lore. Watch it pass through moderation, continuity, and scoring.
+          Back the storylines you love, and see the best ones turned into comics and reels.
+        </p>
+        <div className="lineage-demo" aria-hidden="true">
+          <span className="ld-node">The Ashwrights</span>
+          <span className="ld-edge" />
+          <span className="ld-node">Sorrel of the Low Fords</span>
+          <span className="ld-edge" />
+          <span className="ld-node ld-leaf">The First Pour</span>
+        </div>
+      </section>
+
+      <section className="login-panel">
+        <h2 className="panel-title">Sign in</h2>
+        <button className="btn-google" onClick={signInWithGoogle}>
+          <GoogleGlyph />
+          Continue with Google
+        </button>
+        {!firebaseEnabled && (
+          <>
+            <div className="or"><span>or</span></div>
+            <button className="btn-ghost" onClick={continueDemo}>Explore in demo mode</button>
+            <p className="panel-note">
+              Add your Firebase keys to <code>.env</code> to switch on real Google sign-in.
+            </p>
+          </>
+        )}
+      </section>
+    </div>
+  )
+}

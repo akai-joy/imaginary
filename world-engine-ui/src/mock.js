@@ -1,0 +1,93 @@
+// Demo data so the UI is fully clickable with no backend.
+// Shapes mirror the API contract documented in README.md.
+
+export const mockStorylines = [
+  {
+    tree_id: 'tre_ember',
+    title: 'The Ember Accord',
+    summary: 'A fragile truce between the Ashwrights and the river-clans, sworn in cooled slag and smoke.',
+    type: 'plot',
+    member_count: 9,
+    vote_total: 142,
+    composite_score: 88,
+    version: 4,
+    voted: false,
+    derived_from: null,
+    nodes: [
+      { id: 'cn_a1f', type: 'faction', title: 'The Ashwrights', contributor: 'mara', version: 2, derived_from: [],
+        body: 'Smiths who bind every oath into a poured ingot. Break the word, and the metal is melted before the clan.' },
+      { id: 'cn_b2c', type: 'character', title: 'Sorrel of the Low Fords', contributor: 'idris', version: 1, derived_from: ['cn_a1f'],
+        body: 'A river-clan envoy carrying a borrowed name and a real grievance. Negotiates the Accord against her own people’s wishes.' },
+      { id: 'cn_c3d', type: 'location', title: 'The Slag Court', contributor: 'mara', version: 1, derived_from: ['cn_a1f'],
+        body: 'Where oaths are poured. A cooling floor of black glass that rings when walked.' },
+      { id: 'cn_d4e', type: 'plot', title: 'The First Pour', contributor: 'idris', version: 3, derived_from: ['cn_b2c', 'cn_c3d'],
+        body: 'Sorrel and the Ashwright matriarch pour a shared oath — and someone has salted the metal so it will crack.' },
+    ],
+  },
+  {
+    tree_id: 'tre_tide',
+    title: 'Salt in the Archive',
+    summary: 'A drowned library surfaces once a generation, and the records it carries rewrite who owns the coast.',
+    type: 'lore',
+    member_count: 6,
+    vote_total: 97,
+    composite_score: 81,
+    version: 2,
+    voted: false,
+    derived_from: 'tre_ember',
+    nodes: [
+      { id: 'cn_e5f', type: 'location', title: 'The Tideward Archive', contributor: 'noor', version: 2, derived_from: ['cn_c3d'],
+        body: 'A library that sinks and rises with a century-long tide. Its ledgers are law when they are dry.' },
+      { id: 'cn_f6a', type: 'character', title: 'Keeper Vol', contributor: 'theo', version: 1, derived_from: ['cn_e5f'],
+        body: 'The only one who can read the salt-stained ledgers, and the only one with reason to forge them.' },
+    ],
+  },
+  {
+    tree_id: 'tre_lantern',
+    title: 'The Lantern That Owes',
+    summary: 'A debt-spirit bound into a streetlamp pays back every favour — at compounding, ruinous interest.',
+    type: 'character',
+    member_count: 4,
+    vote_total: 64,
+    composite_score: 76,
+    version: 1,
+    voted: false,
+    derived_from: null,
+    nodes: [
+      { id: 'cn_g7b', type: 'character', title: 'The Lantern', contributor: 'pia', version: 1, derived_from: [],
+        body: 'It remembers every kindness done beneath it and insists on repaying, whether you want it to or not.' },
+      { id: 'cn_h8c', type: 'plot', title: 'A Small Mercy', contributor: 'pia', version: 1, derived_from: ['cn_g7b'],
+        body: 'A child shares bread under the Lantern. By morning the whole street owes a debt none of them can name.' },
+    ],
+  },
+]
+
+export const mockShowcase = [
+  {
+    id: 'mda_ember_comic',
+    tree_id: 'tre_ember',
+    kind: 'comic',
+    title: 'The Ember Accord',
+    caption: 'The First Pour — and the salt that cracks it. (AI-generated)',
+    hashtags: ['#worldengine', '#emberaccord'],
+    contributor_ids: ['mara', 'idris'],
+    gcs_url: null,
+    panels: [
+      'The Slag Court, black glass underfoot, two clans facing across the floor.',
+      'Sorrel lifts the ladle; the matriarch lays in her oath-token.',
+      'The metal hisses — a fault line of salt blooms white.',
+      'Silence, then the long crack. The Accord breaks before it sets.',
+    ],
+  },
+  {
+    id: 'mda_tide_reel',
+    tree_id: 'tre_tide',
+    kind: 'reel',
+    title: 'Salt in the Archive',
+    caption: 'The Tideward Archive surfaces. Keeper Vol opens a dry ledger. (AI-generated)',
+    hashtags: ['#worldengine', '#saltarchive'],
+    contributor_ids: ['noor', 'theo'],
+    gcs_url: null,
+    scenes: ['The tide pulls back.', 'Stone shelves break the surface.', 'A ledger, dry for the first time in a century.'],
+  },
+]
