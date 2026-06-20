@@ -185,7 +185,13 @@ class SecurityPlugin(BasePlugin):
 
     def __init__(self):
         super().__init__(name="security_plugin")
-        self.client = genai.Client()
+        self._client = None
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = genai.Client()
+        return self._client
 
     async def before_model_callback(
         self, *, callback_context: CallbackContext, llm_request: LlmRequest
