@@ -84,7 +84,7 @@ def storyboard_node(ctx: Context, node_input: list[ShowcaseJob]):
     """Storyboard Node.
 
     Compresses a qualifying StorylineTree into a structured storyboard (title, logline, scenes),
-    checks it against safety and Media Content policies, and updates the ShowcaseJob in the database.
+    checks it against safety and Media Content policies, and updates the ShowcaseJob via proposals.
     """
     store = get_store()
     jobs = node_input or []
@@ -93,6 +93,10 @@ def storyboard_node(ctx: Context, node_input: list[ShowcaseJob]):
         all_jobs = store.list_showcase_jobs()
         jobs = [j for j in all_jobs if j.status == ShowcaseJobStatus.QUEUED]
     processed_jobs = []
+
+    # Initialize storyboard proposal in state
+    if "storyboard_proposal" not in ctx.state:
+        ctx.state["storyboard_proposal"] = {}
 
     # Get all canon entries to reconstruct tree members
     canon_entries = store.list_canon_entries()
@@ -112,9 +116,12 @@ def storyboard_node(ctx: Context, node_input: list[ShowcaseJob]):
         if not member_ids:
             logger.warning(
                 "No canon entries found for tree %s. Blocking job.", job.tree_id
-            )
+              )
             job.status = ShowcaseJobStatus.BLOCKED
-            store.save_showcase_job(job)
+            ctx.state["storyboard_proposal"][job.id] = {
+                "status": ShowcaseJobStatus.BLOCKED.value,
+                "storyboard_json": None,
+            }
             processed_jobs.append(job)
             continue
 
@@ -181,7 +188,10 @@ Canon Entries of the Story Tree:
                 hidden_check.reason,
             )
             job.status = ShowcaseJobStatus.BLOCKED
-            store.save_showcase_job(job)
+            ctx.state["storyboard_proposal"][job.id] = {
+                "status": ShowcaseJobStatus.BLOCKED.value,
+                "storyboard_json": None,
+            }
             processed_jobs.append(job)
             yield Event(
                 content=types.Content(
@@ -202,7 +212,10 @@ Canon Entries of the Story Tree:
                 injection_check.reason,
             )
             job.status = ShowcaseJobStatus.BLOCKED
-            store.save_showcase_job(job)
+            ctx.state["storyboard_proposal"][job.id] = {
+                "status": ShowcaseJobStatus.BLOCKED.value,
+                "storyboard_json": None,
+            }
             processed_jobs.append(job)
             yield Event(
                 content=types.Content(
@@ -265,7 +278,10 @@ Storyboard to evaluate:
                 "Storyboard blocked by LLM Moderation. Reason: %s", verdict_data.reason
             )
             job.status = ShowcaseJobStatus.BLOCKED
-            store.save_showcase_job(job)
+            ctx.state["storyboard_proposal"][job.id] = {
+                "status": ShowcaseJobStatus.BLOCKED.value,
+                "storyboard_json": None,
+            }
             yield Event(
                 content=types.Content(
                     role="model",
@@ -285,10 +301,13 @@ Storyboard to evaluate:
 
             job.storyboard_json = storyboard.model_dump_json()
             job.status = ShowcaseJobStatus.STORYBOARDED
-            store.save_showcase_job(job)
+            ctx.state["storyboard_proposal"][job.id] = {
+                "status": ShowcaseJobStatus.STORYBOARDED.value,
+                "storyboard_json": job.storyboard_json,
+            }
 
             logger.info(
-                "Successfully generated and moderated storyboard for job %s", job.id
+                "Successfully proposed storyboard for job %s", job.id
             )
 
             scenes_text = []

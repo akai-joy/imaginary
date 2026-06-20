@@ -279,7 +279,7 @@ async def test_before_tool_allowlist_and_gcs():
             )
         assert "forbidden from calling dangerous tool" in str(excinfo.value)
     finally:
-        AGENT_TOOL_ALLOWLIST["narrator"] = ["save_canon_entry"]
+        AGENT_TOOL_ALLOWLIST["narrator"] = []
 
     # 3. GCS Bucket prefix constraint
     from app.core.security import AGENT_TOOL_ALLOWLIST
@@ -315,8 +315,6 @@ async def test_before_tool_allowlist_and_gcs():
         AGENT_TOOL_ALLOWLIST["publish_handoff"] = [
             "list_canon_entries",
             "get_canon_entry",
-            "save_media_asset",
-            "save_showcase_job",
         ]
 
 

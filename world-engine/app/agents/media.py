@@ -221,6 +221,8 @@ def media_node(ctx: Context, node_input: list[ShowcaseJob]):
         jobs = [j for j in all_jobs if j.status == ShowcaseJobStatus.STORYBOARDED]
 
     processed_jobs = []
+    if "media_proposal" not in ctx.state:
+        ctx.state["media_proposal"] = {}
     client = genai.Client()
 
     policy = load_policy_config()
@@ -303,9 +305,11 @@ def media_node(ctx: Context, node_input: list[ShowcaseJob]):
                 )
             )
 
-        # Update job status
+        # Propose job status update
         job.status = ShowcaseJobStatus.GENERATED
-        store.save_showcase_job(job)
+        ctx.state["media_proposal"][job.id] = {
+            "status": ShowcaseJobStatus.GENERATED.value,
+        }
         processed_jobs.append(job)
 
     yield Event(output=processed_jobs)

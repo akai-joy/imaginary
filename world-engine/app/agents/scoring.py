@@ -170,15 +170,13 @@ Referenced Canon Entries (from Provenance analysis):
     composite_score = max(score_range[0], min(score_range[1], raw_composite))
     points_delta = round(composite_score * multiplier)
 
-    # 5. Record LedgerEntry
-    ledger_entry = LedgerEntry(
-        contribution_id=contrib.id,
-        author_id=contrib.author_id,
-        points_delta=points_delta,
-        reason=f"Scored {composite_score:.1f}/100 (Creativity: {creativity}, Consistency: {consistency}, Build-on: {build_on})",
-        created_at=datetime.utcnow(),
-    )
-    store.save_ledger_entry(ledger_entry)
+    # 5. Store scoring proposal in state
+    ctx.state["scoring_proposal"] = {
+        "contribution_id": contrib.id,
+        "author_id": contrib.author_id,
+        "points_delta": points_delta,
+        "reason": f"Scored {composite_score:.1f}/100 (Creativity: {creativity}, Consistency: {consistency}, Build-on: {build_on})",
+    }
 
     logger.info(
         "Scoring completed: Creativity=%d, Consistency=%d, Build-on=%d, Total=%.1f, Points=%d",

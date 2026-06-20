@@ -166,7 +166,10 @@ Referenced Canon Entries:
             hidden_check.reason,
         )
         contrib.status = ContributionStatus.BLOCKED
-        store.save_contribution(contrib)
+        ctx.state["narrator_proposal"] = {
+            "contrib_status": ContributionStatus.BLOCKED.value,
+            "world_summary": world_summary,
+        }
         yield Event(
             content=types.Content(
                 role="model",
@@ -183,7 +186,10 @@ Referenced Canon Entries:
             injection_check.reason,
         )
         contrib.status = ContributionStatus.BLOCKED
-        store.save_contribution(contrib)
+        ctx.state["narrator_proposal"] = {
+            "contrib_status": ContributionStatus.BLOCKED.value,
+            "world_summary": world_summary,
+        }
         yield Event(
             content=types.Content(
                 role="model",
@@ -225,7 +231,7 @@ Content to evaluate:
 
     verdict_data = ModerationResponse.model_validate_json(response.text)
 
-    # 6. Handle Verdict and Persist if Allowed
+    # 6. Handle Verdict and Propose Persist if Allowed
     if verdict_data.verdict == ModerationVerdict.BLOCK:
         logger.warning(
             "Second-pass BLOCK on narrator output: Category=%s, Reason=%s",
@@ -233,7 +239,10 @@ Content to evaluate:
             verdict_data.reason,
         )
         contrib.status = ContributionStatus.BLOCKED
-        store.save_contribution(contrib)
+        ctx.state["narrator_proposal"] = {
+            "contrib_status": ContributionStatus.BLOCKED.value,
+            "world_summary": world_summary,
+        }
         yield Event(
             content=types.Content(
                 role="model",
@@ -253,15 +262,27 @@ Content to evaluate:
         ):
             contrib.status = ContributionStatus.FLAGGED
             logger.info(
-                "Contribution is FLAGGED (first-pass or second-pass), not saving CanonEntry."
+                "Contribution is FLAGGED (first-pass or second-pass), proposing FLAGGED status."
             )
         else:
             contrib.status = ContributionStatus.ACCEPTED
-            logger.info("Contribution is ALLOWED and ACCEPTED, saving CanonEntry.")
-            store.save_canon_entry(new_entry)
+            logger.info("Contribution is ALLOWED and ACCEPTED, proposing ACCEPTED status + CanonEntry.")
 
-        # Save to database
-        store.save_contribution(contrib)
+        # Save narrator proposal to state
+        ctx.state["narrator_proposal"] = {
+            "new_entry": {
+                "id": new_entry.id,
+                "type": new_entry.type.value if hasattr(new_entry.type, "value") else new_entry.type,
+                "title": new_entry.title,
+                "body": new_entry.body,
+                "contributor_id": new_entry.contributor_id,
+                "derived_from": new_entry.derived_from,
+                "version": new_entry.version,
+                "created_at": new_entry.created_at.isoformat(),
+            },
+            "contrib_status": contrib.status.value if hasattr(contrib.status, "value") else contrib.status,
+            "world_summary": world_summary,
+        }
 
         yield Event(
             content=types.Content(
@@ -270,8 +291,8 @@ Content to evaluate:
                     types.Part.from_text(
                         text=f"**World Synthesis Summary**:\n{world_summary}\n\n"
                         f"**Second-pass Safety Verdict**: `{verdict_data.verdict.value}`\n"
-                        f"- **Saved Canon Entry**: `{new_entry.id if contrib.status == ContributionStatus.ACCEPTED else 'None (FLAGGED)'}` (Version {new_entry.version if contrib.status == ContributionStatus.ACCEPTED else 'N/A'})\n"
-                        f"- **Contribution Status**: `{contrib.status.value}`"
+                        f"- **Proposed Canon Entry**: `{new_entry.id if contrib.status == ContributionStatus.ACCEPTED else 'None (FLAGGED)'}` (Version {new_entry.version if contrib.status == ContributionStatus.ACCEPTED else 'N/A'})\n"
+                        f"- **Proposed Status**: `{contrib.status.value}`"
                     )
                 ],
             )

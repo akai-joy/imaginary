@@ -46,22 +46,19 @@ AGENT_TOOL_ALLOWLIST = {
     "intake": ["validate_input", "get_status"],
     "moderation": ["scan_content"],
     "continuity": ["list_canon_entries", "get_canon_entry"],
-    "provenance": ["list_canon_entries", "get_canon_entry", "save_provenance_link"],
-    "scoring": ["get_points_for_contribution", "save_ledger_entry"],
-    "narrator": ["save_canon_entry"],
+    "provenance": ["list_canon_entries", "get_canon_entry"],
+    "scoring": ["get_points_for_contribution"],
+    "narrator": [],
     "showcase_tally": [
         "list_canon_entries",
         "get_canon_entry",
-        "save_showcase_job",
         "list_showcase_jobs",
     ],
-    "storyboard": ["save_showcase_job", "get_showcase_job"],
-    "media": ["save_showcase_job", "get_showcase_job"],
+    "storyboard": ["get_showcase_job"],
+    "media": ["get_showcase_job"],
     "publish_handoff": [
         "list_canon_entries",
         "get_canon_entry",
-        "save_media_asset",
-        "save_showcase_job",
     ],
 }
 

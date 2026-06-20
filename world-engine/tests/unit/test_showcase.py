@@ -97,6 +97,7 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
     try:
         test_store = SQLiteCanonStore(db_path=temp_db_path)
         monkeypatch.setattr("app.agents.showcase_tally.get_store", lambda: test_store)
+        monkeypatch.setattr("app.core.controller.get_store", lambda: test_store)
 
         # 1. Preseed two trees
         # Tree A (qualifies, root canon_a)
@@ -173,7 +174,11 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
 
         # 2. Run the node
         ctx = MagicMock()
+        ctx.state = {}
         events = list(showcase_tally_node(ctx, "run"))
+
+        from app.core.controller import showcase_controller_node
+        list(showcase_controller_node(ctx, events[1].output))
 
         # Verify events
         assert len(events) == 2
@@ -195,7 +200,10 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
         assert jobs_in_db[0].media_type == "reel"
 
         # 3. Running again should filter out existing jobs and generate nothing
-        events_2 = list(showcase_tally_node(ctx, "run"))
+        ctx_2 = MagicMock()
+        ctx_2.state = {}
+        events_2 = list(showcase_tally_node(ctx_2, "run"))
+        list(showcase_controller_node(ctx_2, events_2[1].output))
         assert len(events_2) == 2
         assert len(events_2[1].output) == 0
 
@@ -212,6 +220,7 @@ def test_storyboard_node_success(monkeypatch):
         test_store = SQLiteCanonStore(db_path=temp_db_path)
         monkeypatch.setattr("app.agents.storyboard.get_store", lambda: test_store)
         monkeypatch.setattr("app.agents.showcase_tally.get_store", lambda: test_store)
+        monkeypatch.setattr("app.core.controller.get_store", lambda: test_store)
 
         # Preseed tree
         entry_a = CanonEntry(
@@ -251,7 +260,11 @@ def test_storyboard_node_success(monkeypatch):
 
         # Run node
         ctx = MagicMock()
+        ctx.state = {}
         events = list(storyboard_node(ctx, [job]))
+
+        from app.core.controller import showcase_controller_node
+        list(showcase_controller_node(ctx, events[1].output))
 
         # Verify output
         assert len(events) == 2
@@ -278,6 +291,7 @@ def test_storyboard_node_blocked(monkeypatch):
         test_store = SQLiteCanonStore(db_path=temp_db_path)
         monkeypatch.setattr("app.agents.storyboard.get_store", lambda: test_store)
         monkeypatch.setattr("app.agents.showcase_tally.get_store", lambda: test_store)
+        monkeypatch.setattr("app.core.controller.get_store", lambda: test_store)
 
         entry_a = CanonEntry(
             id="canon_a",
@@ -315,7 +329,11 @@ def test_storyboard_node_blocked(monkeypatch):
         monkeypatch.setattr("google.genai.Client", lambda: mock_client)
 
         ctx = MagicMock()
+        ctx.state = {}
         events = list(storyboard_node(ctx, [job]))
+
+        from app.core.controller import showcase_controller_node
+        list(showcase_controller_node(ctx, events[1].output))
 
         # Verify output
         assert len(events) == 2
@@ -336,6 +354,7 @@ def test_media_node_comic(monkeypatch):
     try:
         test_store = SQLiteCanonStore(db_path=temp_db_path)
         monkeypatch.setattr("app.agents.media.get_store", lambda: test_store)
+        monkeypatch.setattr("app.core.controller.get_store", lambda: test_store)
 
         job = ShowcaseJob(
             id="job_media_comic",
@@ -352,7 +371,11 @@ def test_media_node_comic(monkeypatch):
         monkeypatch.setattr("google.genai.Client", lambda: mock_client)
 
         ctx = MagicMock()
+        ctx.state = {}
         events = list(media_node(ctx, [job]))
+
+        from app.core.controller import showcase_controller_node
+        list(showcase_controller_node(ctx, events[1].output))
 
         assert len(events) == 2
         processed = events[1].output
@@ -381,6 +404,7 @@ def test_media_node_reel(monkeypatch):
     try:
         test_store = SQLiteCanonStore(db_path=temp_db_path)
         monkeypatch.setattr("app.agents.media.get_store", lambda: test_store)
+        monkeypatch.setattr("app.core.controller.get_store", lambda: test_store)
 
         job = ShowcaseJob(
             id="job_media_reel",
@@ -396,7 +420,11 @@ def test_media_node_reel(monkeypatch):
         monkeypatch.setattr("google.genai.Client", lambda: mock_client)
 
         ctx = MagicMock()
+        ctx.state = {}
         events = list(media_node(ctx, [job]))
+
+        from app.core.controller import showcase_controller_node
+        list(showcase_controller_node(ctx, events[1].output))
 
         assert len(events) == 2
         processed = events[1].output
@@ -423,6 +451,7 @@ def test_publish_handoff_node(monkeypatch):
     try:
         test_store = SQLiteCanonStore(db_path=temp_db_path)
         monkeypatch.setattr("app.agents.publish_handoff.get_store", lambda: test_store)
+        monkeypatch.setattr("app.core.controller.get_store", lambda: test_store)
 
         # Preseed tree
         entry_a = CanonEntry(
@@ -457,7 +486,11 @@ def test_publish_handoff_node(monkeypatch):
         monkeypatch.setattr("google.genai.Client", lambda: mock_client)
 
         ctx = MagicMock()
+        ctx.state = {}
         events = list(publish_handoff_node(ctx, [job]))
+
+        from app.core.controller import showcase_controller_node
+        list(showcase_controller_node(ctx, events[1].output))
 
         assert len(events) == 2
         processed = events[1].output

@@ -147,16 +147,19 @@ def showcase_tally_node(ctx: Context, node_input: Any):
             status=ShowcaseJobStatus.QUEUED,
             created_at=datetime.utcnow(),
         )
-        store.save_showcase_job(job)
         new_jobs.append(job)
         logger.info(
-            "Emitted ShowcaseJob %s (type=%s) for tree %s (votes=%.1f, score=%.1f)",
+            "Proposed ShowcaseJob %s (type=%s) for tree %s (votes=%.1f, score=%.1f)",
             job.id,
             media_type,
             tree.tree_id,
             tree.vote_total,
             tree.composite_score,
         )
+
+    ctx.state["tally_proposal"] = {
+        "new_jobs": [job.model_dump() for job in new_jobs]
+    }
 
     # Yield info summary as markdown text
     summary_parts = [

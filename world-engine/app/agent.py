@@ -27,6 +27,7 @@ from app.agents.narrator import narrator_node
 from app.agents.provenance import provenance_node
 from app.agents.scoring import scoring_node
 from app.core.security import SecurityPlugin
+from app.core.controller import ingest_controller_node
 
 # Authenticate with Google Cloud
 if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:
@@ -55,6 +56,7 @@ continuity_node_node = build_node(continuity_node)
 provenance_node_node = build_node(provenance_node)
 scoring_node_node = build_node(scoring_node)
 narrator_node_node = build_node(narrator_node)
+controller_node_node = build_node(ingest_controller_node)
 
 # Root workflow skeleton for the world engine ingest pipeline
 root_workflow = Workflow(
@@ -79,6 +81,10 @@ root_workflow = Workflow(
         Edge(
             from_node=scoring_node_node,
             to_node=narrator_node_node,
+        ),
+        Edge(
+            from_node=narrator_node_node,
+            to_node=controller_node_node,
         ),
     ],
 )

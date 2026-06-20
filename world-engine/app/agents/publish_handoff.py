@@ -77,6 +77,8 @@ def publish_handoff_node(ctx: Context, node_input: list[ShowcaseJob]):
         jobs = [j for j in all_jobs if j.status == ShowcaseJobStatus.GENERATED]
 
     processed_jobs = []
+    if "publish_proposal" not in ctx.state:
+        ctx.state["publish_proposal"] = {}
     client = genai.Client()
 
     policy = load_policy_config()
@@ -137,30 +139,18 @@ Generate a structured JSON response matching the CaptionResponse schema."""
         hashtag_line = " ".join([f"#{tag}" for tag in caption_data.hashtags])
         caption_with_hashtags = f"{final_caption}\n\n{hashtag_line}"
 
-        # 3. Simulate uploading to GCS bucket
+        # 3. Propose uploading to GCS bucket
         ext = "png" if job.media_type == "comic" else "mp4"
         src_filename = f"{job.id}_{job.media_type}.{ext}"
         src_path = os.path.join(CACHE_DIR, src_filename)
 
         dest_filename = f"{job.id}_final.{ext}"
         dest_bucket_dir = os.path.join(GCS_MOCK_DIR, bucket)
-        os.makedirs(dest_bucket_dir, exist_ok=True)
         dest_path = os.path.join(dest_bucket_dir, dest_filename)
-
-        if os.path.exists(src_path):
-            shutil.copy2(src_path, dest_path)
-            logger.info("Copied generated asset to mock GCS path: %s", dest_path)
-        else:
-            # Fallback mock file if source is missing in test environment
-            with open(dest_path, "w") as f:
-                f.write(f"Mock GCS Media Asset Data for job {job.id}")
-            logger.warning(
-                "Source asset not found. Created empty mock GCS file at %s", dest_path
-            )
 
         gcs_url = f"https://storage.googleapis.com/{bucket}/{dest_filename}"
 
-        # 4. Save MediaAsset to store
+        # 4. Construct MediaAsset proposal
         asset = MediaAsset(
             id=f"asset_{uuid.uuid4()}",
             job_id=job.id,
@@ -172,8 +162,6 @@ Generate a structured JSON response matching the CaptionResponse schema."""
             contributor_ids=resolved_contributors,
             created_at=datetime.utcnow(),
         )
-        store.save_media_asset(asset)
-        logger.info("Saved MediaAsset %s to database", asset.id)
 
         # 5. Build Instagram container payload
         if job.media_type == "comic":
@@ -192,9 +180,25 @@ Generate a structured JSON response matching the CaptionResponse schema."""
             yaml.dump(instagram_payload, default_flow_style=False),
         )
 
-        # Update job status
+        # Update job status in memory and queue proposal for deterministic controller
         job.status = ShowcaseJobStatus.PUBLISHED_MOCK
-        store.save_showcase_job(job)
+        ctx.state["publish_proposal"][job.id] = {
+            "status": ShowcaseJobStatus.PUBLISHED_MOCK.value,
+            "src_path": src_path,
+            "dest_path": dest_path,
+            "bucket": bucket,
+            "media_asset": {
+                "id": asset.id,
+                "job_id": asset.job_id,
+                "tree_id": asset.tree_id,
+                "kind": asset.kind,
+                "gcs_url": asset.gcs_url,
+                "caption": asset.caption,
+                "hashtags": asset.hashtags,
+                "contributor_ids": asset.contributor_ids,
+                "created_at": asset.created_at.isoformat(),
+            }
+        }
         processed_jobs.append(job)
 
         yield Event(
