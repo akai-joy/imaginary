@@ -613,11 +613,7 @@ class FirestoreCanonStore(CanonStore):
         self.client.collection("votes").document(vote.id).set(data)
 
     def get_votes_for_tree(self, tree_id: str) -> list[Vote]:
-        docs = (
-            self.client.collection("votes")
-            .where("tree_id", "==", tree_id)
-            .stream()
-        )
+        docs = self.client.collection("votes").where("tree_id", "==", tree_id).stream()
         results = []
         for doc in docs:
             d = doc.to_dict()
