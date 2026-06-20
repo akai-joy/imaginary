@@ -18,7 +18,14 @@ import sqlite3
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from app.core.types import CanonEntry, Contribution, LedgerEntry, ShowcaseJob, Vote
+from app.core.types import (
+    CanonEntry,
+    Contribution,
+    LedgerEntry,
+    MediaAsset,
+    ShowcaseJob,
+    Vote,
+)
 
 
 class CanonStore(ABC):
@@ -87,6 +94,16 @@ class CanonStore(ABC):
     @abstractmethod
     def list_showcase_jobs(self) -> list[ShowcaseJob]:
         """List all showcase jobs."""
+        pass
+
+    @abstractmethod
+    def save_media_asset(self, asset: MediaAsset) -> None:
+        """Save a generated media asset."""
+        pass
+
+    @abstractmethod
+    def list_media_assets(self) -> list[MediaAsset]:
+        """List all generated media assets."""
         pass
 
     @abstractmethod
@@ -169,6 +186,21 @@ class SQLiteCanonStore(CanonStore):
                 cursor.execute(
                     "ALTER TABLE showcase_jobs ADD COLUMN storyboard_json TEXT"
                 )
+
+            # Media assets table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS media_assets (
+                    id TEXT PRIMARY KEY,
+                    job_id TEXT NOT NULL,
+                    tree_id TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    gcs_url TEXT NOT NULL,
+                    caption TEXT NOT NULL,
+                    hashtags_json TEXT NOT NULL,
+                    contributor_ids_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
             conn.commit()
 
     def save_contribution(self, contribution: Contribution) -> None:
@@ -480,6 +512,54 @@ class SQLiteCanonStore(CanonStore):
             row = cursor.fetchone()
             return row[0] if row else 0
 
+    def save_media_asset(self, asset: MediaAsset) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO media_assets (
+                    id, job_id, tree_id, kind, gcs_url, caption, hashtags_json, contributor_ids_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    asset.id,
+                    asset.job_id,
+                    asset.tree_id,
+                    asset.kind,
+                    asset.gcs_url,
+                    asset.caption,
+                    json.dumps(asset.hashtags),
+                    json.dumps(asset.contributor_ids),
+                    asset.created_at.isoformat(),
+                ),
+            )
+            conn.commit()
+
+    def list_media_assets(self) -> list[MediaAsset]:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, job_id, tree_id, kind, gcs_url, caption, hashtags_json, contributor_ids_json, created_at
+                FROM media_assets
+            """
+            )
+            rows = cursor.fetchall()
+            return [
+                MediaAsset(
+                    id=row[0],
+                    job_id=row[1],
+                    tree_id=row[2],
+                    kind=row[3],
+                    gcs_url=row[4],
+                    caption=row[5],
+                    hashtags=json.loads(row[6]),
+                    contributor_ids=json.loads(row[7]),
+                    created_at=datetime.fromisoformat(row[8]),
+                )
+                for row in rows
+            ]
+
 
 class FirestoreCanonStore(CanonStore):
     """Firestore implementation of the CanonStore interface."""
@@ -692,6 +772,40 @@ class FirestoreCanonStore(CanonStore):
             d = doc.to_dict()
             return int(d.get("points_delta", 0))
         return 0
+
+    def save_media_asset(self, asset: MediaAsset) -> None:
+        data = {
+            "id": asset.id,
+            "job_id": asset.job_id,
+            "tree_id": asset.tree_id,
+            "kind": asset.kind,
+            "gcs_url": asset.gcs_url,
+            "caption": asset.caption,
+            "hashtags": asset.hashtags,
+            "contributor_ids": asset.contributor_ids,
+            "created_at": asset.created_at.isoformat(),
+        }
+        self.client.collection("media_assets").document(asset.id).set(data)
+
+    def list_media_assets(self) -> list[MediaAsset]:
+        docs = self.client.collection("media_assets").stream()
+        results = []
+        for doc in docs:
+            d = doc.to_dict()
+            results.append(
+                MediaAsset(
+                    id=d["id"],
+                    job_id=d["job_id"],
+                    tree_id=d["tree_id"],
+                    kind=d["kind"],
+                    gcs_url=d["gcs_url"],
+                    caption=d["caption"],
+                    hashtags=d.get("hashtags", []),
+                    contributor_ids=d.get("contributor_ids", []),
+                    created_at=datetime.fromisoformat(d["created_at"]),
+                )
+            )
+        return results
 
 
 def get_store() -> CanonStore:

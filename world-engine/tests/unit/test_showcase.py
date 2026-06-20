@@ -17,6 +17,8 @@ import tempfile
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from app.agents.media import media_node
+from app.agents.publish_handoff import publish_handoff_node
 from app.agents.showcase_tally import assemble_trees, showcase_tally_node
 from app.agents.storyboard import storyboard_node
 from app.core.store import SQLiteCanonStore
@@ -321,6 +323,164 @@ def test_storyboard_node_blocked(monkeypatch):
         assert updated_job is not None
         assert updated_job.status == ShowcaseJobStatus.BLOCKED
         assert updated_job.storyboard_json is None
+
+    finally:
+        if os.path.exists(temp_db_path):
+            os.remove(temp_db_path)
+
+
+def test_media_node_comic(monkeypatch):
+    """Test generating a comic page from storyboard panels."""
+    fd, temp_db_path = tempfile.mkstemp()
+    os.close(fd)
+    try:
+        test_store = SQLiteCanonStore(db_path=temp_db_path)
+        monkeypatch.setattr("app.agents.media.get_store", lambda: test_store)
+
+        job = ShowcaseJob(
+            id="job_media_comic",
+            tree_id="canon_a",
+            media_type="comic",
+            status=ShowcaseJobStatus.STORYBOARDED,
+            storyboard_json='{"title": "Test Title", "logline": "Test Logline", "scenes": [{"scene_number": 1, "visual_description": "A wizard practicing fire magic in Eldoria.", "caption": "Scene 1 caption"}]}',
+            created_at=datetime.utcnow(),
+        )
+        test_store.save_showcase_job(job)
+
+        # Mock GenAI client to generate panel/image
+        mock_client = MagicMock()
+        monkeypatch.setattr("google.genai.Client", lambda: mock_client)
+
+        ctx = MagicMock()
+        events = list(media_node(ctx, [job]))
+
+        assert len(events) == 2
+        processed = events[1].output
+        assert len(processed) == 1
+
+        updated_job = test_store.get_showcase_job("job_media_comic")
+        assert updated_job is not None
+        assert updated_job.status == ShowcaseJobStatus.GENERATED
+
+        # Verify cached asset was created
+        final_file = "cache/job_media_comic_comic.png"
+        assert os.path.exists(final_file)
+        # Cleanup final file
+        if os.path.exists(final_file):
+            os.remove(final_file)
+
+    finally:
+        if os.path.exists(temp_db_path):
+            os.remove(temp_db_path)
+
+
+def test_media_node_reel(monkeypatch):
+    """Test generating and chaining a reel from storyboard scenes."""
+    fd, temp_db_path = tempfile.mkstemp()
+    os.close(fd)
+    try:
+        test_store = SQLiteCanonStore(db_path=temp_db_path)
+        monkeypatch.setattr("app.agents.media.get_store", lambda: test_store)
+
+        job = ShowcaseJob(
+            id="job_media_reel",
+            tree_id="canon_a",
+            media_type="reel",
+            status=ShowcaseJobStatus.STORYBOARDED,
+            storyboard_json='{"title": "Test Title", "logline": "Test Logline", "scenes": [{"scene_number": 1, "visual_description": "A wizard practicing fire magic in Eldoria.", "caption": "Scene 1 caption"}]}',
+            created_at=datetime.utcnow(),
+        )
+        test_store.save_showcase_job(job)
+
+        mock_client = MagicMock()
+        monkeypatch.setattr("google.genai.Client", lambda: mock_client)
+
+        ctx = MagicMock()
+        events = list(media_node(ctx, [job]))
+
+        assert len(events) == 2
+        processed = events[1].output
+        assert len(processed) == 1
+
+        updated_job = test_store.get_showcase_job("job_media_reel")
+        assert updated_job is not None
+        assert updated_job.status == ShowcaseJobStatus.GENERATED
+
+        final_file = "cache/job_media_reel_reel.mp4"
+        assert os.path.exists(final_file)
+        if os.path.exists(final_file):
+            os.remove(final_file)
+
+    finally:
+        if os.path.exists(temp_db_path):
+            os.remove(temp_db_path)
+
+
+def test_publish_handoff_node(monkeypatch):
+    """Test that publish_handoff_node records MediaAsset and logs IG container payload."""
+    fd, temp_db_path = tempfile.mkstemp()
+    os.close(fd)
+    try:
+        test_store = SQLiteCanonStore(db_path=temp_db_path)
+        monkeypatch.setattr("app.agents.publish_handoff.get_store", lambda: test_store)
+
+        # Preseed tree
+        entry_a = CanonEntry(
+            id="canon_a",
+            type=ContributionType.CHARACTER,
+            title="Alistair",
+            body="Wizard.",
+            contributor_id="creator123",
+            derived_from=[],
+            version=1,
+            created_at=datetime.utcnow(),
+        )
+        test_store.save_canon_entry(entry_a)
+
+        job = ShowcaseJob(
+            id="job_publish",
+            tree_id="canon_a",
+            media_type="comic",
+            status=ShowcaseJobStatus.GENERATED,
+            storyboard_json='{"title": "Test Title", "logline": "Test Logline", "scenes": [{"scene_number": 1, "visual_description": "Visual desc", "caption": "Caption desc"}]}',
+            created_at=datetime.utcnow(),
+        )
+        test_store.save_showcase_job(job)
+
+        # Mock GenAI client for caption generation
+        mock_client = MagicMock()
+        mock_caption_response = MagicMock()
+        mock_caption_response.text = (
+            '{"caption": "Cool wizard story!", "hashtags": ["wizard", "eldoria"]}'
+        )
+        mock_client.models.generate_content.return_value = mock_caption_response
+        monkeypatch.setattr("google.genai.Client", lambda: mock_client)
+
+        ctx = MagicMock()
+        events = list(publish_handoff_node(ctx, [job]))
+
+        assert len(events) == 2
+        processed = events[1].output
+        assert len(processed) == 1
+
+        updated_job = test_store.get_showcase_job("job_publish")
+        assert updated_job is not None
+        assert updated_job.status == ShowcaseJobStatus.PUBLISHED_MOCK
+
+        # Verify MediaAsset is written to database
+        assets = test_store.list_media_assets()
+        assert len(assets) == 1
+        asset = assets[0]
+        assert asset.job_id == "job_publish"
+        assert asset.tree_id == "canon_a"
+        assert "creator123" in asset.contributor_ids
+        assert "AI-generated" in asset.caption
+        assert "wizard" in asset.hashtags
+
+        # Clean up mock file created in gcs_mock
+        gcs_mock_file = "gcs_mock/world-engine-showcase/job_publish_final.png"
+        if os.path.exists(gcs_mock_file):
+            os.remove(gcs_mock_file)
 
     finally:
         if os.path.exists(temp_db_path):

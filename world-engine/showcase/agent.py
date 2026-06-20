@@ -20,6 +20,8 @@ from google.adk.workflow import Edge, Workflow
 from google.adk.workflow._graph import START
 from google.adk.workflow.utils._workflow_graph_utils import build_node
 
+from app.agents.media import media_node
+from app.agents.publish_handoff import publish_handoff_node
 from app.agents.showcase_tally import showcase_tally_node
 from app.agents.storyboard import storyboard_node
 
@@ -46,6 +48,8 @@ else:
 # Pre-build nodes
 tally_node = build_node(showcase_tally_node)
 storyboard_node_node = build_node(storyboard_node)
+media_node_node = build_node(media_node)
+publish_handoff_node_node = build_node(publish_handoff_node)
 
 # Showcase workflow skeleton
 showcase_workflow = Workflow(
@@ -53,6 +57,8 @@ showcase_workflow = Workflow(
     edges=[
         Edge(from_node=START, to_node=tally_node),
         Edge(from_node=tally_node, to_node=storyboard_node_node),
+        Edge(from_node=storyboard_node_node, to_node=media_node_node),
+        Edge(from_node=media_node_node, to_node=publish_handoff_node_node),
     ],
 )
 

@@ -114,3 +114,15 @@ class ShowcaseJob(BaseModel):
     status: ShowcaseJobStatus = ShowcaseJobStatus.QUEUED
     created_at: datetime = Field(default_factory=datetime.utcnow)
     storyboard_json: str | None = None
+
+
+class MediaAsset(BaseModel):
+    id: str
+    job_id: str
+    tree_id: str
+    kind: str  # "comic" or "reel"
+    gcs_url: str
+    caption: str
+    hashtags: list[str] = Field(default_factory=list)
+    contributor_ids: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
