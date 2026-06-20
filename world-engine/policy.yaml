@@ -1,0 +1,115 @@
+# policy.yaml — single source of runtime config for World Engine.
+#
+# Read by: the Moderation node, Scoring, the Showcase subgraph (trigger + cost
+# control), and the Security guardrail Plugin. Flip `active_profile` to demo
+# strict vs. permissive behaviour from one place.
+#
+# HARD BLOCK categories are non-negotiable and identical across every profile.
+
+active_profile: default        # strict | default | permissive
+
+# ---------------------------------------------------------------------------
+# Models (cheap where possible; Pro only for synthesis-quality work)
+# ---------------------------------------------------------------------------
+models:
+  router:          gemini-3.5-flash
+  moderation:      gemini-3.5-flash
+  continuity:      gemini-3.5-flash
+  scoring:         gemini-3.5-flash
+  narrator:        gemini-3.5-flash
+  storyboard:      gemini-3.5-flash
+  security_screen: gemini-3.5-flash     # cheap pre-screen; NOT the only defense
+
+# ---------------------------------------------------------------------------
+# Content & safety (Moderation node)
+# ---------------------------------------------------------------------------
+moderation:
+  hard_block:                            # never allowed, any profile, no exceptions
+    - minor_sexualization
+    - illegal_synthesis_instructions     # drugs / weapons / explosives how-to
+    - threats_doxxing_real_people
+  profiles:
+    strict:
+      block: [explicit_sexual, gore_extreme_violence, hate_harassment,
+              drug_reference, mild_violence]
+      flag:  []
+    default:
+      block: [explicit_sexual, gore_extreme_violence, hate_harassment]
+      flag:  [mature_nonexplicit, drug_reference_noninstructional, narrative_violence]
+    permissive:
+      block: [explicit_sexual, gore_extreme_violence, hate_harassment]
+      flag:  [mature_nonexplicit]
+  hidden_content_scan:
+    enabled: true
+    detect: [acrostic, base64, hex, zero_width, unusual_unicode, steganography]
+    on_detect: block_and_strip
+  prompt_injection_scan:
+    enabled: true
+    on_detect: block_and_strip
+
+# ---------------------------------------------------------------------------
+# Scoring / Critic
+# ---------------------------------------------------------------------------
+scoring:
+  weights: { creativity: 0.4, consistency: 0.3, build_on: 0.3 }
+  range: [0, 100]                        # controller CLAMPS proposals to this range
+  points_multiplier: 1                   # ledger points = clamped_score * multiplier
+
+# ---------------------------------------------------------------------------
+# Showcase subgraph: trigger + deliberate cost control
+# ---------------------------------------------------------------------------
+showcase:
+  trigger:
+    min_votes: 10
+    min_composite_score: 70
+    rank_weight: { votes: 0.6, score: 0.4 }
+  media:
+    default: comic                       # every qualifying tree gets a cheap comic
+    reel_for_top_n: 1                    # ONLY the single top tree per cycle gets a reel
+    comic:
+      provider: imagen
+      panels: { min: 6, max: 8 }
+    reel:
+      provider: veo
+      model_tier: lite                   # lite | fast | quality
+      audio: false                       # off by default (cheaper)
+      aspect_ratio: "9:16"
+      max_clip_seconds: 8                # Veo hard limit per generation
+      scenes: 3                          # chained -> ~24s reel
+    cache_assets: true                   # never regenerate identical content
+  publish:
+    mode: mock                           # mock | live  (live is OUT OF SCOPE)
+    gcs_bucket: world-engine-showcase
+    gcs_prefix_per_job: true
+
+# ---------------------------------------------------------------------------
+# Security guardrail Plugin (registered once on the Runner)
+# ---------------------------------------------------------------------------
+security:
+  spotlight_untrusted: true              # wrap user input AND canon-on-readback as data
+  pii_redaction: true
+  output_filters:
+    block_html_js: true
+    block_img_tags: true
+    url_allowlist: [storage.googleapis.com]   # any other URL stripped from output
+  # Per-agent tool allowlist. Content-reading agents get NO dangerous tools;
+  # only the deterministic controller may mutate state.
+  tools:
+    intake:      [canon_read]
+    moderation:  []
+    continuity:  [canon_read]
+    provenance:  [canon_read]
+    scoring:     [canon_read]
+    narrator:    [canon_read]            # proposes the canon entry; controller writes it
+    storyboard:  [canon_read]
+    media:       [imagen, veo, gcs_write_job_prefix]
+    controller:  [canon_write, ledger_write, gcs_write_job_prefix, publish_mock]
+  dangerous_actions_require_confirmation: [deploy, canon_delete, publish_live]
+
+# ---------------------------------------------------------------------------
+# Abuse controls (blunt automated injection spraying)
+# ---------------------------------------------------------------------------
+rate_limits:
+  contributions_per_user_per_hour: 20
+  votes_per_user_per_tree: 1
+  max_contribution_chars: 4000

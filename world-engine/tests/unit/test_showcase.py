@@ -1,0 +1,188 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import os
+import tempfile
+from datetime import datetime
+from unittest.mock import MagicMock
+
+import pytest
+
+from app.agents.showcase_tally import assemble_trees, showcase_tally_node
+from app.core.store import SQLiteCanonStore
+from app.core.types import CanonEntry, ContributionType, LedgerEntry, Vote, ShowcaseJobStatus
+
+
+def test_assemble_trees():
+    """Test that story tree walking recursively collects descendants starting from roots."""
+    entry_a = CanonEntry(
+        id="canon_a",
+        type=ContributionType.CHARACTER,
+        title="A",
+        body="Root entry A",
+        contributor_id="u1",
+        derived_from=[],
+        version=1,
+        created_at=datetime.utcnow()
+    )
+    entry_b = CanonEntry(
+        id="canon_b",
+        type=ContributionType.CHARACTER,
+        title="B",
+        body="Child entry B",
+        contributor_id="u1",
+        derived_from=["canon_a"],
+        version=1,
+        created_at=datetime.utcnow()
+    )
+    entry_c = CanonEntry(
+        id="canon_c",
+        type=ContributionType.CHARACTER,
+        title="C",
+        body="Child entry C",
+        contributor_id="u1",
+        derived_from=["canon_b"],
+        version=1,
+        created_at=datetime.utcnow()
+    )
+    entry_d = CanonEntry(
+        id="canon_d",
+        type=ContributionType.CHARACTER,
+        title="D",
+        body="Another root D",
+        contributor_id="u2",
+        derived_from=[],
+        version=1,
+        created_at=datetime.utcnow()
+    )
+    
+    entries = [entry_a, entry_b, entry_c, entry_d]
+    trees = assemble_trees(entries)
+    
+    # We should have two trees: one with root canon_a, one with root canon_d
+    assert len(trees) == 2
+    tree_map = {root_id: member_ids for root_id, member_ids in trees}
+    
+    assert "canon_a" in tree_map
+    assert set(tree_map["canon_a"]) == {"canon_a", "canon_b", "canon_c"}
+    
+    assert "canon_d" in tree_map
+    assert set(tree_map["canon_d"]) == {"canon_d"}
+
+
+def test_showcase_tally_node_emits_jobs(monkeypatch):
+    """Test that showcase_tally_node correctly processes trees and emits the correct jobs."""
+    fd, temp_db_path = tempfile.mkstemp()
+    os.close(fd)
+    
+    try:
+        test_store = SQLiteCanonStore(db_path=temp_db_path)
+        monkeypatch.setattr("app.agents.showcase_tally.get_store", lambda: test_store)
+        
+        # 1. Preseed two trees
+        # Tree A (qualifies, root canon_a)
+        # Score is 80, votes is 12 (threshold is votes>=10, score>=70)
+        entry_a = CanonEntry(
+            id="canon_a",
+            type=ContributionType.CHARACTER,
+            title="Alistair",
+            body="Root A",
+            contributor_id="u1",
+            derived_from=[],
+            version=1,
+            created_at=datetime.utcnow()
+        )
+        test_store.save_canon_entry(entry_a)
+        
+        # Score for A (contrib ID "a")
+        test_store.save_ledger_entry(LedgerEntry(
+            contribution_id="a",
+            author_id="u1",
+            points_delta=80,
+            reason="Scoring A",
+            created_at=datetime.utcnow()
+        ))
+        
+        # 12 votes for canon_a
+        for i in range(12):
+            test_store.save_vote(Vote(
+                id=f"vote_a_{i}",
+                voter_id=f"user_{i}",
+                tree_id="canon_a",
+                weight=1.0,
+                created_at=datetime.utcnow()
+            ))
+            
+        # Tree B (does not qualify, root canon_b)
+        # Score is 90, votes is 5
+        entry_b = CanonEntry(
+            id="canon_b",
+            type=ContributionType.CHARACTER,
+            title="Eldoria",
+            body="Root B",
+            contributor_id="u2",
+            derived_from=[],
+            version=1,
+            created_at=datetime.utcnow()
+        )
+        test_store.save_canon_entry(entry_b)
+        
+        test_store.save_ledger_entry(LedgerEntry(
+            contribution_id="b",
+            author_id="u2",
+            points_delta=90,
+            reason="Scoring B",
+            created_at=datetime.utcnow()
+        ))
+        
+        for i in range(5):
+            test_store.save_vote(Vote(
+                id=f"vote_b_{i}",
+                voter_id=f"user_{i}",
+                tree_id="canon_b",
+                weight=1.0,
+                created_at=datetime.utcnow()
+            ))
+
+        # 2. Run the node
+        ctx = MagicMock()
+        events = list(showcase_tally_node(ctx, "run"))
+        
+        # Verify events
+        assert len(events) == 2
+        summary_event = events[0]
+        output_event = events[1]
+        
+        # Newly created jobs in output
+        new_jobs = output_event.output
+        assert len(new_jobs) == 1
+        job = new_jobs[0]
+        assert job.tree_id == "canon_a"
+        assert job.media_type == "reel"  # Single top-ranked gets reel
+        assert job.status == ShowcaseJobStatus.QUEUED
+        
+        # Verify in database
+        jobs_in_db = test_store.list_showcase_jobs()
+        assert len(jobs_in_db) == 1
+        assert jobs_in_db[0].tree_id == "canon_a"
+        assert jobs_in_db[0].media_type == "reel"
+        
+        # 3. Running again should filter out existing jobs and generate nothing
+        events_2 = list(showcase_tally_node(ctx, "run"))
+        assert len(events_2) == 2
+        assert len(events_2[1].output) == 0
+
+    finally:
+        if os.path.exists(temp_db_path):
+            os.remove(temp_db_path)
