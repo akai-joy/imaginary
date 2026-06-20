@@ -89,9 +89,28 @@ class StorylineTree(BaseModel):
     composite_score: float = 0.0
 
 
+class StoryboardScene(BaseModel):
+    scene_number: int = Field(description="The ordered panel/scene number (1-based).")
+    visual_description: str = Field(
+        description="Detailed visual description for image/video generation model."
+    )
+    caption: str = Field(
+        description="The text caption or dialogue line accompanying this scene."
+    )
+
+
+class Storyboard(BaseModel):
+    title: str = Field(description="A descriptive title for this showcase story.")
+    logline: str = Field(description="A concise logline summarizing the narrative arc.")
+    scenes: list[StoryboardScene] = Field(
+        description="Ordered list of panels (for comic) or scenes (for reel)."
+    )
+
+
 class ShowcaseJob(BaseModel):
     id: str
     tree_id: str
     media_type: str  # "comic" or "reel"
     status: ShowcaseJobStatus = ShowcaseJobStatus.QUEUED
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    storyboard_json: str | None = None

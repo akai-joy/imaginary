@@ -21,6 +21,7 @@ from google.adk.workflow._graph import START
 from google.adk.workflow.utils._workflow_graph_utils import build_node
 
 from app.agents.showcase_tally import showcase_tally_node
+from app.agents.storyboard import storyboard_node
 
 # Authenticate with Google Cloud
 if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:
@@ -42,14 +43,16 @@ else:
     os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "False"
 
 
-# Pre-build node
+# Pre-build nodes
 tally_node = build_node(showcase_tally_node)
+storyboard_node_node = build_node(storyboard_node)
 
 # Showcase workflow skeleton
 showcase_workflow = Workflow(
     name="showcase_workflow",
     edges=[
         Edge(from_node=START, to_node=tally_node),
+        Edge(from_node=tally_node, to_node=storyboard_node_node),
     ],
 )
 

@@ -158,9 +158,17 @@ class SQLiteCanonStore(CanonStore):
                     tree_id TEXT NOT NULL,
                     media_type TEXT NOT NULL,
                     status TEXT NOT NULL,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    storyboard_json TEXT
                 )
             """)
+            # Check and add storyboard_json to showcase_jobs if missing (self-healing migration)
+            cursor.execute("PRAGMA table_info(showcase_jobs)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if "storyboard_json" not in columns:
+                cursor.execute(
+                    "ALTER TABLE showcase_jobs ADD COLUMN storyboard_json TEXT"
+                )
             conn.commit()
 
     def save_contribution(self, contribution: Contribution) -> None:
@@ -402,8 +410,8 @@ class SQLiteCanonStore(CanonStore):
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO showcase_jobs (
-                    id, tree_id, media_type, status, created_at
-                ) VALUES (?, ?, ?, ?, ?)
+                    id, tree_id, media_type, status, created_at, storyboard_json
+                ) VALUES (?, ?, ?, ?, ?, ?)
             """,
                 (
                     job.id,
@@ -411,6 +419,7 @@ class SQLiteCanonStore(CanonStore):
                     job.media_type,
                     job.status.value,
                     job.created_at.isoformat(),
+                    job.storyboard_json,
                 ),
             )
             conn.commit()
@@ -420,7 +429,7 @@ class SQLiteCanonStore(CanonStore):
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, tree_id, media_type, status, created_at
+                SELECT id, tree_id, media_type, status, created_at, storyboard_json
                 FROM showcase_jobs WHERE id = ?
             """,
                 (job_id,),
@@ -434,6 +443,7 @@ class SQLiteCanonStore(CanonStore):
                 media_type=row[2],
                 status=row[3],
                 created_at=datetime.fromisoformat(row[4]),
+                storyboard_json=row[5],
             )
 
     def list_showcase_jobs(self) -> list[ShowcaseJob]:
@@ -441,7 +451,7 @@ class SQLiteCanonStore(CanonStore):
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, tree_id, media_type, status, created_at
+                SELECT id, tree_id, media_type, status, created_at, storyboard_json
                 FROM showcase_jobs
             """
             )
@@ -453,6 +463,7 @@ class SQLiteCanonStore(CanonStore):
                     media_type=row[2],
                     status=row[3],
                     created_at=datetime.fromisoformat(row[4]),
+                    storyboard_json=row[5],
                 )
                 for row in rows
             ]
@@ -635,6 +646,7 @@ class FirestoreCanonStore(CanonStore):
             "media_type": job.media_type,
             "status": job.status.value,
             "created_at": job.created_at.isoformat(),
+            "storyboard_json": job.storyboard_json,
         }
         self.client.collection("showcase_jobs").document(job.id).set(data)
 
@@ -649,6 +661,7 @@ class FirestoreCanonStore(CanonStore):
             media_type=d["media_type"],
             status=d["status"],
             created_at=datetime.fromisoformat(d["created_at"]),
+            storyboard_json=d.get("storyboard_json"),
         )
 
     def list_showcase_jobs(self) -> list[ShowcaseJob]:
@@ -663,6 +676,7 @@ class FirestoreCanonStore(CanonStore):
                     media_type=d["media_type"],
                     status=d["status"],
                     created_at=datetime.fromisoformat(d["created_at"]),
+                    storyboard_json=d.get("storyboard_json"),
                 )
             )
         return results

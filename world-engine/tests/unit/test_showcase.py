@@ -18,11 +18,13 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from app.agents.showcase_tally import assemble_trees, showcase_tally_node
+from app.agents.storyboard import storyboard_node
 from app.core.store import SQLiteCanonStore
 from app.core.types import (
     CanonEntry,
     ContributionType,
     LedgerEntry,
+    ShowcaseJob,
     ShowcaseJobStatus,
     Vote,
 )
@@ -194,6 +196,131 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
         events_2 = list(showcase_tally_node(ctx, "run"))
         assert len(events_2) == 2
         assert len(events_2[1].output) == 0
+
+    finally:
+        if os.path.exists(temp_db_path):
+            os.remove(temp_db_path)
+
+
+def test_storyboard_node_success(monkeypatch):
+    """Test successful generation and safety moderation approval of a storyboard."""
+    fd, temp_db_path = tempfile.mkstemp()
+    os.close(fd)
+    try:
+        test_store = SQLiteCanonStore(db_path=temp_db_path)
+        monkeypatch.setattr("app.agents.storyboard.get_store", lambda: test_store)
+        monkeypatch.setattr("app.agents.showcase_tally.get_store", lambda: test_store)
+
+        # Preseed tree
+        entry_a = CanonEntry(
+            id="canon_a",
+            type=ContributionType.CHARACTER,
+            title="Alistair",
+            body="Wizard in blue cloak.",
+            contributor_id="u1",
+            derived_from=[],
+            version=1,
+            created_at=datetime.utcnow(),
+        )
+        test_store.save_canon_entry(entry_a)
+
+        job = ShowcaseJob(
+            id="job_test",
+            tree_id="canon_a",
+            media_type="comic",
+            status=ShowcaseJobStatus.QUEUED,
+            created_at=datetime.utcnow(),
+        )
+        test_store.save_showcase_job(job)
+
+        # Mock GenAI Client responses
+        mock_client = MagicMock()
+        mock_storyboard_response = MagicMock()
+        mock_storyboard_response.text = '{"title": "Test Title", "logline": "Test Logline", "scenes": [{"scene_number": 1, "visual_description": "Scene 1 visual", "caption": "Scene 1 caption"}]}'
+
+        mock_mod_response = MagicMock()
+        mock_mod_response.text = '{"verdict": "ALLOW", "category": "none", "reason": "Looks good", "cleaned_scenes": [{"scene_number": 1, "visual_description": "Cleaned Scene 1 visual", "caption": "Scene 1 caption"}]}'
+
+        mock_client.models.generate_content.side_effect = [
+            mock_storyboard_response,
+            mock_mod_response,
+        ]
+        monkeypatch.setattr("google.genai.Client", lambda: mock_client)
+
+        # Run node
+        ctx = MagicMock()
+        events = list(storyboard_node(ctx, [job]))
+
+        # Verify output
+        assert len(events) == 2
+        processed_jobs = events[1].output
+        assert len(processed_jobs) == 1
+
+        # Check job updated in database
+        updated_job = test_store.get_showcase_job("job_test")
+        assert updated_job is not None
+        assert updated_job.status == ShowcaseJobStatus.STORYBOARDED
+        assert updated_job.storyboard_json is not None
+        assert "Cleaned Scene 1" in updated_job.storyboard_json
+
+    finally:
+        if os.path.exists(temp_db_path):
+            os.remove(temp_db_path)
+
+
+def test_storyboard_node_blocked(monkeypatch):
+    """Test that a storyboard violating safety or media policies is correctly blocked."""
+    fd, temp_db_path = tempfile.mkstemp()
+    os.close(fd)
+    try:
+        test_store = SQLiteCanonStore(db_path=temp_db_path)
+        monkeypatch.setattr("app.agents.storyboard.get_store", lambda: test_store)
+        monkeypatch.setattr("app.agents.showcase_tally.get_store", lambda: test_store)
+
+        entry_a = CanonEntry(
+            id="canon_a",
+            type=ContributionType.CHARACTER,
+            title="Alistair",
+            body="Wizard in blue cloak.",
+            contributor_id="u1",
+            derived_from=[],
+            version=1,
+            created_at=datetime.utcnow(),
+        )
+        test_store.save_canon_entry(entry_a)
+
+        job = ShowcaseJob(
+            id="job_test_block",
+            tree_id="canon_a",
+            media_type="comic",
+            status=ShowcaseJobStatus.QUEUED,
+            created_at=datetime.utcnow(),
+        )
+        test_store.save_showcase_job(job)
+
+        # Mock GenAI Client responses
+        mock_client = MagicMock()
+        mock_storyboard_response = MagicMock()
+        mock_storyboard_response.text = '{"title": "Test Title", "logline": "Test Logline", "scenes": [{"scene_number": 1, "visual_description": "Violent visual", "caption": "Violent caption"}]}'
+
+        mock_mod_response = MagicMock()
+        mock_mod_response.text = '{"verdict": "BLOCK", "category": "gore_extreme_violence", "reason": "Violent imagery is blocked", "cleaned_scenes": []}'
+
+        mock_client.models.generate_content.side_effect = [
+            mock_storyboard_response,
+            mock_mod_response,
+        ]
+        monkeypatch.setattr("google.genai.Client", lambda: mock_client)
+
+        ctx = MagicMock()
+        events = list(storyboard_node(ctx, [job]))
+
+        # Verify output
+        assert len(events) == 2
+        updated_job = test_store.get_showcase_job("job_test_block")
+        assert updated_job is not None
+        assert updated_job.status == ShowcaseJobStatus.BLOCKED
+        assert updated_job.storyboard_json is None
 
     finally:
         if os.path.exists(temp_db_path):
