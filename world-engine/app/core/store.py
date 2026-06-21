@@ -505,12 +505,12 @@ class SQLiteCanonStore(CanonStore):
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT points_delta FROM ledger_entries WHERE contribution_id = ?
+                SELECT SUM(points_delta) FROM ledger_entries WHERE contribution_id = ?
             """,
                 (contribution_id,),
             )
             row = cursor.fetchone()
-            return row[0] if row else 0
+            return row[0] if row and row[0] is not None else 0
 
     def save_media_asset(self, asset: MediaAsset) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -765,13 +765,13 @@ class FirestoreCanonStore(CanonStore):
         docs = (
             self.client.collection("ledger_entries")
             .where("contribution_id", "==", contribution_id)
-            .limit(1)
             .stream()
         )
+        total = 0
         for doc in docs:
             d = doc.to_dict()
-            return int(d.get("points_delta", 0))
-        return 0
+            total += int(d.get("points_delta", 0))
+        return total
 
     def save_media_asset(self, asset: MediaAsset) -> None:
         data = {

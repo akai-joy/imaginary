@@ -8,7 +8,7 @@ export default function VoteButton({ treeId, initialTotal, initialVoted }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
 
-  async function back() {
+  async function castVote() {
     if (voted || busy) return
     setBusy(true)
     setErr(null)
@@ -32,7 +32,7 @@ export default function VoteButton({ treeId, initialTotal, initialVoted }) {
     <div className="vote">
       <button
         className={`vote-btn ${voted ? 'is-voted' : ''}`}
-        onClick={back}
+        onClick={castVote}
         disabled={voted || busy}
         aria-pressed={voted}
       >

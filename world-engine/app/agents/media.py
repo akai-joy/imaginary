@@ -51,6 +51,11 @@ def get_model_for_role(role: str) -> str:
     return policy.get("models", {}).get(role, "gemini-3.5-flash")
 
 
+def is_vertex_enabled() -> bool:
+    """Checks if Vertex AI is enabled based on environment variables."""
+    return os.environ.get("GOOGLE_GENAI_USE_VERTEXAI") == "True"
+
+
 def get_cached_asset_path(prompt: str, ext: str) -> str | None:
     """Check if the asset with this prompt has been generated and cached."""
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -104,30 +109,46 @@ def create_mock_panel_image(scene_num: int, description: str) -> bytes:
 
 
 def generate_imagen_panel(client: genai.Client, prompt: str, scene_num: int) -> bytes:
-    """Generates an image via Vertex AI Imagen or falls back to mock generation."""
+    """Generates an image via Vertex AI Imagen, Gemini Nano Banana, or falls back to mock generation."""
     try:
         # Check cache first
         cached = get_cached_asset_path(prompt, "png")
         if cached:
-            logger.info("Imagen cache hit for scene %d", scene_num)
+            logger.info("Imagen/Nano Banana cache hit for scene %d", scene_num)
             with open(cached, "rb") as f:
                 return f.read()
 
-        logger.info("Calling Imagen for scene %d...", scene_num)
-        response = client.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt,
-            config=types.GenerateImagesConfig(
-                number_of_images=1,
-                aspect_ratio="1:1",
-            ),
-        )
-        if response.generated_images:
-            img_bytes = response.generated_images[0].image.image_bytes
-            cache_asset_data(prompt, img_bytes, "png")
-            return img_bytes
+        if is_vertex_enabled():
+            logger.info("Calling Imagen (Vertex AI) for scene %d...", scene_num)
+            response = client.models.generate_images(
+                model="imagen-3.0-generate-002",
+                prompt=prompt,
+                config=types.GenerateImagesConfig(
+                    number_of_images=1,
+                    aspect_ratio="1:1",
+                ),
+            )
+            if response.generated_images:
+                img_bytes = response.generated_images[0].image.image_bytes
+                cache_asset_data(prompt, img_bytes, "png")
+                return img_bytes
+        else:
+            logger.info("Calling Gemini Nano Banana (Developer API) for scene %d...", scene_num)
+            response = client.models.generate_content(
+                model="gemini-3.1-flash-image",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["IMAGE"]
+                )
+            )
+            if response.candidates and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if part.inline_data:
+                        img_bytes = part.inline_data.data
+                        cache_asset_data(prompt, img_bytes, "png")
+                        return img_bytes
     except Exception as e:
-        logger.warning("Imagen generation failed: %s. Generating local mock panel.", e)
+        logger.warning("Imagen/Nano Banana generation failed: %s. Generating local mock panel.", e)
 
     # Fallback to local cacheable mock image
     mock_bytes = create_mock_panel_image(scene_num, prompt)
@@ -146,30 +167,38 @@ def generate_veo_clip(
             with open(cached, "rb") as f:
                 return f.read()
 
-        logger.info("Calling Veo (%s) for scene %d...", model_tier, scene_num)
+        if is_vertex_enabled():
+            model_name = "veo-2.0-generate-001"
+            logger.info("Calling Vertex Veo (%s) for scene %d...", model_tier, scene_num)
+        else:
+            model_name = "veo-3.1-generate-preview"
+            logger.info("Calling AI Studio Veo (%s) for scene %d...", model_tier, scene_num)
+
         operation = client.models.generate_videos(
-            model="veo-2.0-generate-001",
+            model=model_name,
             prompt=prompt,
             config=types.GenerateVideosConfig(
                 aspect_ratio="9:16",
                 duration_seconds=8,
             ),
         )
-        # Note: In real GenAI SDK, this returns an operation that needs to be polled.
-        # We simulate checking and getting mock if not completed.
-        op_any: Any = operation
-        if hasattr(op_any, "result"):
-            result = op_any.result()
-        else:
-            result = op_any
 
-        res_any: Any = result
-        if (
-            res_any
-            and hasattr(res_any, "generated_videos")
-            and res_any.generated_videos
-        ):
-            clip_bytes = res_any.generated_videos[0].video.video_bytes
+        # Poll the operation until completion
+        import time
+        max_attempts = 12  # Poll for up to 2 minutes
+        for i in range(max_attempts):
+            if operation.done:
+                break
+            logger.info("Waiting for Veo video clip %d generation (attempt %d/%d)...", scene_num, i+1, max_attempts)
+            time.sleep(10)
+            operation = client.operations.get(operation)
+
+        if not operation.done:
+            raise TimeoutError("Veo video generation timed out.")
+
+        if operation.response and operation.response.generated_videos:
+            gen_video = operation.response.generated_videos[0]
+            clip_bytes = client.files.download(file=gen_video.video)
             cache_asset_data(prompt, clip_bytes, "mp4")
             return clip_bytes
     except Exception as e:
@@ -218,7 +247,7 @@ def media_node(ctx: Context, node_input: list[ShowcaseJob]):
     jobs = node_input or []
     if not jobs:
         all_jobs = store.list_showcase_jobs()
-        jobs = [j for j in all_jobs if j.status == ShowcaseJobStatus.STORYBOARDED]
+        jobs = [j for j in all_jobs if j.status == ShowcaseJobStatus.DIRECTED]
 
     processed_jobs = []
     if "media_proposal" not in ctx.state:
@@ -231,7 +260,7 @@ def media_node(ctx: Context, node_input: list[ShowcaseJob]):
     model_tier = reel_cfg.get("model_tier", "lite")
 
     for job in jobs:
-        if job.status != ShowcaseJobStatus.STORYBOARDED:
+        if job.status != ShowcaseJobStatus.DIRECTED:
             processed_jobs.append(job)
             continue
 
@@ -251,8 +280,11 @@ def media_node(ctx: Context, node_input: list[ShowcaseJob]):
         if job.media_type == "comic":
             panel_images = []
             for scene in storyboard.scenes:
-                # Compile prompt with a consistent style directive
-                prompt = f"{scene.visual_description}, high quality fantasy comic book style illustration, vibrant colors"
+                # Use optimized prompt if available, otherwise compile fallback prompt
+                if getattr(scene, "optimized_prompt", None):
+                    prompt = scene.optimized_prompt
+                else:
+                    prompt = f"{scene.visual_description}, high quality fantasy comic book style illustration, vibrant colors"
                 panel_bytes = generate_imagen_panel(client, prompt, scene.scene_number)
                 panel_images.append(panel_bytes)
 
@@ -277,9 +309,12 @@ def media_node(ctx: Context, node_input: list[ShowcaseJob]):
         elif job.media_type == "reel":
             clips = []
             for scene in storyboard.scenes:
-                prompt = (
-                    f"{scene.visual_description}, cinematography, 9:16 vertical video"
-                )
+                if getattr(scene, "optimized_prompt", None):
+                    prompt = scene.optimized_prompt
+                else:
+                    prompt = (
+                        f"{scene.visual_description}, cinematography, 9:16 vertical video"
+                    )
                 clip_bytes = generate_veo_clip(
                     client, prompt, scene.scene_number, model_tier
                 )

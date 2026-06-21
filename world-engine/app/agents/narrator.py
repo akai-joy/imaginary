@@ -14,7 +14,7 @@
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import yaml
 from google import genai
@@ -107,7 +107,7 @@ def narrator_node(ctx: Context, node_input: Contribution):
         contributor_id=contrib.author_id,
         derived_from=contrib.references,
         version=version,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
 
     # 3. Apply spotlighting/wrapping to untrusted inputs for summary generation

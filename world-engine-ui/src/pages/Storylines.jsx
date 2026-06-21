@@ -8,9 +8,12 @@ export default function Storylines() {
   const api = useApi()
   const [items, setItems] = useState(null)
   const [error, setError] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let live = true
+    setItems(null)
+    setError(null)
     api
       .listStorylines()
       .then((d) => live && setItems(d))
@@ -18,9 +21,15 @@ export default function Storylines() {
     return () => {
       live = false
     }
-  }, [api])
+  }, [api, reloadKey])
 
-  if (error) return <p className="state state-error">{error}</p>
+  if (error)
+    return (
+      <div className="state state-error">
+        <p>{error}</p>
+        <button className="btn-primary" onClick={() => setReloadKey((k) => k + 1)}>Try again</button>
+      </div>
+    )
   if (!items) return <p className="state muted">Loading storylines…</p>
   if (items.length === 0)
     return (

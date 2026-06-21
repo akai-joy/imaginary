@@ -9,9 +9,12 @@ export default function StorylineDetail() {
   const api = useApi()
   const [story, setStory] = useState(null)
   const [error, setError] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let live = true
+    setStory(null)
+    setError(null)
     api
       .getStoryline(treeId)
       .then((d) => live && setStory(d))
@@ -19,9 +22,15 @@ export default function StorylineDetail() {
     return () => {
       live = false
     }
-  }, [api, treeId])
+  }, [api, treeId, reloadKey])
 
-  if (error) return <p className="state state-error">{error}</p>
+  if (error)
+    return (
+      <div className="state state-error">
+        <p>{error}</p>
+        <button className="btn-primary" onClick={() => setReloadKey((k) => k + 1)}>Try again</button>
+      </div>
+    )
   if (!story) return <p className="state muted">Loading…</p>
 
   return (

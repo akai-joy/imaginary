@@ -46,14 +46,18 @@ export default function Login() {
 
       <section className="login-panel">
         <h2 className="panel-title">Sign in</h2>
-        <button className="btn-google" onClick={signInWithGoogle}>
-          <GoogleGlyph />
-          Continue with Google
-        </button>
-        {!firebaseEnabled && (
+        {firebaseEnabled ? (
           <>
+            <button className="btn-google" onClick={signInWithGoogle}>
+              <GoogleGlyph />
+              Continue with Google
+            </button>
             <div className="or"><span>or</span></div>
             <button className="btn-ghost" onClick={continueDemo}>Explore in demo mode</button>
+          </>
+        ) : (
+          <>
+            <button className="btn-primary" onClick={continueDemo}>Explore in demo mode</button>
             <p className="panel-note">
               Add your Firebase keys to <code>.env</code> to switch on real Google sign-in.
             </p>

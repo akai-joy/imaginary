@@ -60,6 +60,14 @@ function ShowMeta({ asset }) {
             <span>{asset.contributor_ids.map((c) => `@${c}`).join(' ')}</span>
           </>
         )}
+        {asset.prompt_sheet_url && (
+          <>
+            <span className="dot">·</span>
+            <a href={asset.prompt_sheet_url} target="_blank" rel="noopener noreferrer" className="prompt-link" style={{color: "var(--ochre)", textDecoration: "underline", fontWeight: "bold"}}>
+              📄 Prompt Script Sheet
+            </a>
+          </>
+        )}
       </p>
     </div>
   )
@@ -69,9 +77,12 @@ export default function Showcase() {
   const api = useApi()
   const [items, setItems] = useState(null)
   const [error, setError] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let live = true
+    setItems(null)
+    setError(null)
     api
       .listShowcase()
       .then((d) => live && setItems(d))
@@ -79,12 +90,23 @@ export default function Showcase() {
     return () => {
       live = false
     }
-  }, [api])
+  }, [api, reloadKey])
 
-  if (error) return <p className="state state-error">{error}</p>
+  if (error)
+    return (
+      <div className="state state-error">
+        <p>{error}</p>
+        <button className="btn-primary" onClick={() => setReloadKey((k) => k + 1)}>Try again</button>
+      </div>
+    )
   if (!items) return <p className="state muted">Loading showcase…</p>
   if (items.length === 0)
-    return <p className="state muted">No storylines have crossed the showcase threshold yet.</p>
+    return (
+      <div className="state">
+        <p>No storylines have crossed the showcase threshold yet.</p>
+        <Link className="btn-primary" to="/">Explore storylines</Link>
+      </div>
+    )
 
   return (
     <div className="page">

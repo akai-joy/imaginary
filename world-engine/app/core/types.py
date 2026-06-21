@@ -68,6 +68,7 @@ class LedgerEntry(BaseModel):
 class ShowcaseJobStatus(StrEnum):
     QUEUED = "queued"
     STORYBOARDED = "storyboarded"
+    DIRECTED = "directed"
     BLOCKED = "blocked"
     GENERATED = "generated"
     PUBLISHED_MOCK = "published_mock"
@@ -96,6 +97,10 @@ class StoryboardScene(BaseModel):
     )
     caption: str = Field(
         description="The text caption or dialogue line accompanying this scene."
+    )
+    optimized_prompt: str | None = Field(
+        default=None,
+        description="Detailed cinematic prompt optimized for image/video generation tools."
     )
 
 

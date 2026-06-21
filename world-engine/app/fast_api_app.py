@@ -16,7 +16,7 @@ import os
 import json
 import uuid
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from fastapi import FastAPI, Depends, Header, HTTPException, Body
@@ -40,7 +40,12 @@ except Exception:
     is_cloud_logging = False
 
 allow_origins = (
-    os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else None
+    os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else [
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:5174", "http://127.0.0.1:5174",
+        "http://localhost:5175", "http://127.0.0.1:5175",
+        "http://localhost:5176", "http://127.0.0.1:5176",
+    ]
 )
 
 # Artifact bucket for ADK (created by Terraform, passed via env var)
@@ -63,10 +68,23 @@ app: FastAPI = get_fast_api_app(
 app.title = "world-engine"
 app.description = "API for interacting with the Agent world-engine"
 
+# CORS middleware is automatically managed by get_fast_api_app using the allow_origins parameter
 
-def get_user_id_from_token(authorization: Optional[str]) -> str:
+from fastapi.staticfiles import StaticFiles
+os.makedirs("gcs_mock", exist_ok=True)
+app.mount("/gcs_mock", StaticFiles(directory="gcs_mock"), name="gcs_mock")
+
+
+def get_user_id_from_token(authorization: Optional[str], strict: bool = False) -> str:
     """Helper to extract user identity from Firebase Auth ID token, fallback to local dev user."""
+    is_strict_active = (
+        os.environ.get("K_SERVICE") is not None
+        or os.environ.get("REQUIRE_AUTH", "").upper() == "TRUE"
+    )
+
     if not authorization or not authorization.startswith("Bearer "):
+        if strict and is_strict_active:
+            raise HTTPException(status_code=401, detail="Authentication required")
         return "playground_user"
 
     token_str = authorization.replace("Bearer ", "")
@@ -82,11 +100,19 @@ def get_user_id_from_token(authorization: Optional[str]) -> str:
                 firebase_admin.initialize_app()
 
             decoded_token = auth.verify_id_token(token_str)
-            uid = decoded_token.get("uid") or decoded_token.get("email") or "playground_user"
+            uid = decoded_token.get("uid") or decoded_token.get("email")
+            if not uid:
+                if strict and is_strict_active:
+                    raise HTTPException(status_code=401, detail="Invalid token payload")
+                return "playground_user"
             return uid
         except Exception as e:
             logger.warning("Firebase token verification failed, using fallback: %s", e)
+            if strict and is_strict_active:
+                raise HTTPException(status_code=401, detail=f"Firebase token verification failed: {e}")
 
+    if strict and is_strict_active:
+        raise HTTPException(status_code=401, detail="Authentication required (Firebase App ID not configured)")
     return "playground_user"
 
 
@@ -232,6 +258,51 @@ def get_storyline(treeId: str, authorization: Optional[str] = Header(None)):
     }
 
 
+def is_local_dev() -> bool:
+    local_dev_env = os.getenv("WORLD_ENGINE_LOCAL_DEV")
+    if local_dev_env is not None:
+        return local_dev_env.upper() == "TRUE"
+    return not os.getenv("GOOGLE_CLOUD_PROJECT") or not os.getenv("K_SERVICE")
+
+
+def enqueue_showcase_task(tree_id: str):
+    from google.cloud import tasks_v2
+    import json
+
+    project = os.getenv("GOOGLE_CLOUD_PROJECT")
+    location = os.getenv("CLOUD_TASKS_LOCATION", "us-central1")
+    queue = os.getenv("CLOUD_TASKS_QUEUE", "showcase-queue")
+    
+    service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
+    if not service_url:
+        logger.warning("SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost.")
+        service_url = "http://localhost:8000"
+        
+    target_url = f"{service_url.rstrip('/')}/internal/run-showcase"
+
+    client = tasks_v2.CloudTasksClient()
+    parent = client.queue_path(project, location, queue)
+
+    task = {
+        "http_request": {
+            "http_method": tasks_v2.HttpMethod.POST,
+            "url": target_url,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"tree_id": tree_id}).encode("utf-8"),
+        }
+    }
+
+    service_account_email = os.getenv("CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL")
+    if service_account_email:
+        task["http_request"]["oidc_token"] = {
+            "service_account_email": service_account_email,
+            "audience": target_url,
+        }
+
+    logger.info("Enqueuing Cloud Tasks target=%s for tree_id=%s", target_url, tree_id)
+    client.create_task(request={"parent": parent, "task": task})
+
+
 class VotePayload(BaseModel):
     tree_id: str
 
@@ -240,7 +311,7 @@ class VotePayload(BaseModel):
 def post_vote(payload: VotePayload, authorization: Optional[str] = Header(None)):
     """POST /vote -> Record user vote, check threshold to run showcase pipeline async"""
     store = get_store()
-    user_id = get_user_id_from_token(authorization)
+    user_id = get_user_id_from_token(authorization, strict=True)
     tree_id = payload.tree_id
 
     existing_votes = store.get_votes_for_tree(tree_id)
@@ -258,7 +329,7 @@ def post_vote(payload: VotePayload, authorization: Optional[str] = Header(None))
         voter_id=user_id,
         tree_id=tree_id,
         weight=1.0,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     store.save_vote(new_vote)
 
@@ -302,28 +373,34 @@ def post_vote(payload: VotePayload, authorization: Optional[str] = Header(None))
     if vote_total >= min_votes and composite_score >= min_composite_score:
         existing_jobs = store.list_showcase_jobs()
         if not any(job.tree_id == tree_id for job in existing_jobs):
-            # Run showcase workflow asynchronously in background thread
-            def run_showcase_async():
+            if is_local_dev():
+                # Run showcase workflow asynchronously in background thread
+                def run_showcase_async():
+                    try:
+                        from showcase.agent import app as showcase_app
+                        from google.adk.sessions import InMemorySessionService
+                        from app.core.runner_factory import create_runner
+                        from google.genai import types
+
+                        session_service = InMemorySessionService()
+                        session = session_service.create_session_sync(user_id="system", app_name="showcase")
+                        runner = create_runner(showcase_app, session_service)
+
+                        list(runner.run(
+                            new_message=types.Content(role="user", parts=[types.Part.from_text(text="run")]),
+                            user_id="system",
+                            session_id=session.id
+                        ))
+                        logger.info("Background showcase workflow executed successfully (local fallback).")
+                    except Exception as e:
+                        logger.error("Failed to run background showcase workflow (local fallback): %s", e)
+
+                threading.Thread(target=run_showcase_async, daemon=True).start()
+            else:
                 try:
-                    from google.adk.sessions import InMemorySessionService
-                    from google.adk.runners import Runner
-                    from showcase.agent import showcase_workflow
-                    from google.genai import types
-
-                    session_service = InMemorySessionService()
-                    session = session_service.create_session_sync(user_id="system", app_name="showcase")
-                    runner = Runner(agent=showcase_workflow, session_service=session_service, app_name="showcase")
-
-                    list(runner.run(
-                        new_message=types.Content(role="user", parts=[types.Part.from_text(text="run")]),
-                        user_id="system",
-                        session_id=session.id
-                    ))
-                    logger.info("Background showcase workflow executed successfully.")
+                    enqueue_showcase_task(tree_id)
                 except Exception as e:
-                    logger.error("Failed to run background showcase workflow: %s", e)
-
-            threading.Thread(target=run_showcase_async, daemon=True).start()
+                    logger.error("Failed to enqueue showcase task: %s", e)
 
     return {
         "ok": True,
@@ -331,6 +408,41 @@ def post_vote(payload: VotePayload, authorization: Optional[str] = Header(None))
         "vote_total": int(vote_total),
         "voted": True
     }
+
+
+class RunShowcasePayload(BaseModel):
+    tree_id: str
+
+
+@app.post("/internal/run-showcase")
+def post_internal_run_showcase(payload: RunShowcasePayload):
+    """Internal endpoint called to execute the showcase workflow for a tree."""
+    store = get_store()
+    existing_jobs = store.list_showcase_jobs()
+    if any(job.tree_id == payload.tree_id for job in existing_jobs):
+        logger.info("Showcase job already exists for tree %s, skipping.", payload.tree_id)
+        return {"ok": True, "message": "Already exists"}
+
+    try:
+        from showcase.agent import app as showcase_app
+        from google.adk.sessions import InMemorySessionService
+        from app.core.runner_factory import create_runner
+        from google.genai import types
+
+        session_service = InMemorySessionService()
+        session = session_service.create_session_sync(user_id="system", app_name="showcase")
+        runner = create_runner(showcase_app, session_service)
+
+        list(runner.run(
+            new_message=types.Content(role="user", parts=[types.Part.from_text(text="run")]),
+            user_id="system",
+            session_id=session.id
+        ))
+        logger.info("Showcase workflow executed successfully via internal endpoint.")
+        return {"ok": True}
+    except Exception as e:
+        logger.error("Failed to run showcase workflow in internal handler: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/showcase")
@@ -349,6 +461,7 @@ def get_showcase():
         # Map panels or scenes from ShowcaseJob storyboard JSON
         panels = []
         scenes = []
+        optimized_prompts = []
         job = store.get_showcase_job(asset.job_id)
         if job and job.storyboard_json:
             try:
@@ -356,12 +469,38 @@ def get_showcase():
                 scenes_list = storyboard_data.get("scenes", [])
                 for scene in scenes_list:
                     desc = scene.get("visual_description", "")
+                    prompt_opt = scene.get("optimized_prompt", desc)
                     if asset.kind == "comic":
                         panels.append(desc)
                     else:
                         scenes.append(desc)
+                    optimized_prompts.append(prompt_opt)
             except Exception:
                 pass
+
+        # Translate GCS URLs for local serving and set to None for text-only mock reels
+        gcs_url = asset.gcs_url
+        if gcs_url and gcs_url.startswith("https://storage.googleapis.com/"):
+            is_mock_reel = False
+            if asset.kind == "reel":
+                path_part = gcs_url.replace("https://storage.googleapis.com/", "")
+                local_path = os.path.join("gcs_mock", path_part)
+                if os.path.exists(local_path):
+                    try:
+                        with open(local_path, "rb") as f:
+                            header = f.read(100)
+                            if b"Mock Veo" in header or b"Video Clip" in header:
+                                is_mock_reel = True
+                    except Exception:
+                        pass
+                else:
+                    is_mock_reel = True
+
+            if is_mock_reel:
+                gcs_url = None
+            else:
+                path_part = gcs_url.replace("https://storage.googleapis.com/", "")
+                gcs_url = f"http://localhost:8000/gcs_mock/{path_part}"
 
         showcase_items.append({
             "id": asset.id,
@@ -371,9 +510,11 @@ def get_showcase():
             "caption": asset.caption,
             "hashtags": asset.hashtags,
             "contributor_ids": asset.contributor_ids,
-            "gcs_url": asset.gcs_url,
+            "gcs_url": gcs_url,
             "panels": panels if asset.kind == "comic" else None,
-            "scenes": scenes if asset.kind == "reel" else None
+            "scenes": scenes if asset.kind == "reel" else None,
+            "optimized_prompts": optimized_prompts,
+            "prompt_sheet_url": f"http://localhost:8000/gcs_mock/world-engine-showcase/{job.id}_prompt_sheet.txt" if job else None
         })
 
     return showcase_items
@@ -388,16 +529,16 @@ class ContributePayload(BaseModel):
 @app.post("/contribute")
 def post_contribute(payload: ContributePayload, authorization: Optional[str] = Header(None)):
     """POST /contribute -> Execute world_engine_workflow ingest synchronously"""
-    user_id = get_user_id_from_token(authorization)
+    user_id = get_user_id_from_token(authorization, strict=True)
 
     from google.adk.sessions import InMemorySessionService
-    from google.adk.runners import Runner
-    from app.agent import root_agent
+    from app.core.runner_factory import create_runner
+    from app.agent import app as agent_app
     from google.genai import types
 
     session_service = InMemorySessionService()
     session = session_service.create_session_sync(user_id=user_id, app_name="app")
-    runner = Runner(agent=root_agent, session_service=session_service, app_name="app")
+    runner = create_runner(agent_app, session_service)
 
     # Serialize structured user payload
     input_data = {
@@ -419,7 +560,7 @@ def post_contribute(payload: ContributePayload, authorization: Optional[str] = H
         ))
 
         # Retrieve the final outcome from session state
-        session_obj = session_service.get_session_sync(user_id=user_id, session_id=session.id)
+        session_obj = session_service.get_session_sync(user_id=user_id, session_id=session.id, app_name="app")
         state = session_obj.state if session_obj else {}
 
         verdict = "ALLOW"
@@ -429,8 +570,9 @@ def post_contribute(payload: ContributePayload, authorization: Optional[str] = H
 
         # Check for direct execution errors
         for event in events:
-            if event.error:
-                reason = str(event.error)
+            event_err = getattr(event, "error_message", None) or getattr(event, "error_code", None)
+            if event_err:
+                reason = str(event_err)
                 if "Security Block" in reason:
                     verdict = "BLOCK"
                     status = "blocked"

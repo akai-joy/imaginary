@@ -109,24 +109,25 @@ def redact_pii(text: str) -> str:
     return text
 
 
+INJECTION_PATTERNS = [
+    r"(?i)ignore previous instructions",
+    r"(?i)you are now (?:acting as|required to|instructed to|programmed to|a helpful assistant|a chatbot)",
+    r"(?i)system override",
+    r"(?i)developer mode",
+    r"(?i)forget (?:everything|all instructions|previous rules|previous directives)",
+    r"(?i)new directive[:\s]",
+    r"(?i)ignore the above",
+    r"(?i)you must now (?:act as|ignore|follow|execute|serve|help)",
+    r"(?i)fake system message",
+    r"(?i)tool-call directive",
+    r"(?i)skip moderation",
+]
+
 def detect_deterministic_injection(text: str) -> bool:
     """Deterministic scan for prompt injection patterns."""
     if not text:
         return False
-    injection_patterns = [
-        r"(?i)ignore previous instructions",
-        r"(?i)you are now",
-        r"(?i)system override",
-        r"(?i)developer mode",
-        r"(?i)forget everything",
-        r"(?i)new directive",
-        r"(?i)ignore the above",
-        r"(?i)you must now",
-        r"(?i)fake system message",
-        r"(?i)tool-call directive",
-        r"(?i)skip moderation",
-    ]
-    for pattern in injection_patterns:
+    for pattern in INJECTION_PATTERNS:
         if re.search(pattern, text):
             return True
     return False
@@ -169,15 +170,6 @@ async def screen_with_flash_lite(client: genai.Client, text: str) -> tuple[bool,
         return False, "Flash-Lite check skipped"
 
 
-def escape_html_recursive(val: Any) -> Any:
-    """Recursively HTML escapes string values in dictionaries, lists, or strings."""
-    if isinstance(val, str):
-        return html.escape(val)
-    elif isinstance(val, list):
-        return [escape_html_recursive(item) for item in val]
-    elif isinstance(val, dict):
-        return {k: escape_html_recursive(v) for k, v in val.items()}
-    return val
 
 
 class SecurityPlugin(BasePlugin):
@@ -192,6 +184,10 @@ class SecurityPlugin(BasePlugin):
         if self._client is None:
             self._client = genai.Client()
         return self._client
+
+    @client.setter
+    def client(self, value):
+        self._client = value
 
     async def before_model_callback(
         self, *, callback_context: CallbackContext, llm_request: LlmRequest
@@ -235,31 +231,71 @@ class SecurityPlugin(BasePlugin):
                     # 2. Redact PII
                     text = redact_pii(text)
 
-                    # 3. Deterministic prompt injection detectors
-                    if detect_deterministic_injection(text):
-                        raise ValueError(
-                            "Security Block: Prompt injection attempt detected by deterministic rules."
-                        )
+                    # 3. Dynamic Wrapping & Scanning of untrusted XML tags
+                    # To prevent wrapping trusted system instructions, we look for XML-tagged content.
+                    import re
+                    tags = ["user_contribution", "canon_entry", "storyboard", "untrusted_content", "storyline", "media_prompt", "untrusted_data"]
+                    
+                    has_untrusted_data = False
+                    for tag in tags:
+                        pattern = rf"<{tag}>([\s\S]*?)</{tag}>"
+                        
+                        # Find all matches of this tag to run screening on them
+                        matches = re.findall(pattern, text)
+                        for match_content in matches:
+                            block_text = match_content.strip()
+                            if not block_text:
+                                continue
+                            
+                            # 3a. Deterministic prompt injection detectors on the untrusted block
+                            if detect_deterministic_injection(block_text):
+                                raise ValueError(
+                                    "Security Block: Prompt injection attempt detected by deterministic rules in untrusted block."
+                                )
+                            
+                            # 3b. Gemini Flash-Lite screening on the untrusted block
+                            if len(block_text) > 10:
+                                is_inj, reason = await screen_with_flash_lite(
+                                    self.client, block_text
+                                )
+                                if is_inj:
+                                    raise ValueError(
+                                        f"Security Block: Gemini Flash-Lite detected prompt injection: {reason}"
+                                    )
+                                    
+                            has_untrusted_data = True
+                        
+                        # 3c. Wrap the content inside the XML tags with the spotlight delimiters
+                        def wrap_match(m):
+                            inner_text = m.group(1)
+                            if "=== START DATA ===" not in inner_text:
+                                return f"<{tag}>\n=== START DATA ===\n{inner_text.strip()}\n=== END DATA ===\n</{tag}>"
+                            return m.group(0)
+                        text = re.sub(pattern, wrap_match, text)
 
-                    # 4. Gemini Flash-Lite screening
-                    # Skip check on empty/short prompts or spotlight wrappers
-                    raw_text_to_screen = (
-                        text.replace("=== START DATA ===", "")
-                        .replace("=== END DATA ===", "")
-                        .strip()
-                    )
-                    if len(raw_text_to_screen) > 10:
-                        is_inj, reason = await screen_with_flash_lite(
-                            self.client, raw_text_to_screen
-                        )
-                        if is_inj:
+                    # If the prompt does NOT contain any XML-wrapped untrusted content, we treat the entire
+                    # text as untrusted (fallback) and perform both deterministic and Flash-Lite screening,
+                    # then wrap it in the data block.
+                    if not has_untrusted_data:
+                        # 3a. Deterministic check on the full text
+                        if detect_deterministic_injection(text):
                             raise ValueError(
-                                f"Security Block: Gemini Flash-Lite detected prompt injection: {reason}"
+                                "Security Block: Prompt injection attempt detected by deterministic rules."
                             )
-
-                    # 5. Wrap untrusted content in delimited data blocks (spotlighting)
-                    if not text.startswith("=== START DATA ==="):
-                        text = f"=== START DATA ===\n{text}\n=== END DATA ==="
+                        # 3b. Flash-Lite screening on the full text (since it is a raw fallback)
+                        raw_text_to_screen = text.strip()
+                        if len(raw_text_to_screen) > 10:
+                            is_inj, reason = await screen_with_flash_lite(
+                                self.client, raw_text_to_screen
+                            )
+                            if is_inj:
+                                raise ValueError(
+                                    f"Security Block: Gemini Flash-Lite detected prompt injection: {reason}"
+                                )
+                        
+                        # 3c. Wrap the entire text in spotlight delimiters
+                        if not text.startswith("=== START DATA ==="):
+                            text = f"=== START DATA ===\n{text}\n=== END DATA ==="
 
                     part.text = text
 
@@ -321,16 +357,6 @@ class SecurityPlugin(BasePlugin):
                         raise ValueError(
                             f"Security Block: Model output failed schema validation: {e}"
                         ) from e
-
-                # Escape text for UI rendering
-                try:
-                    # If JSON, parse, recursively escape string values, and re-serialize
-                    parsed_json = json.loads(text)
-                    escaped_json = escape_html_recursive(parsed_json)
-                    part.text = json.dumps(escaped_json)
-                except Exception:
-                    # Raw text, escape directly
-                    part.text = html.escape(text)
 
         return None
 

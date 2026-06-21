@@ -15,7 +15,7 @@
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import yaml
@@ -157,7 +157,7 @@ def intake_router(ctx: Context, node_input: Any):
         type=result.contribution_type,
         title=result.title,
         body=result.body,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         status=ContributionStatus.PENDING,
         references=[],
     )

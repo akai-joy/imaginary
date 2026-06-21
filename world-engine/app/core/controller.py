@@ -15,7 +15,7 @@
 import logging
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from google.adk.agents.context import Context
@@ -49,7 +49,7 @@ def ingest_controller_node(ctx: Context, node_input: Contribution):
             author_id=contrib.author_id,
             points_delta=points_delta,
             reason=scoring_proposal.get("reason", "Scored by controller"),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         store.save_ledger_entry(ledger_entry)
         logger.info("Controller saved LedgerEntry with clamped score: %d", points_delta)
@@ -117,6 +117,36 @@ def showcase_controller_node(ctx: Context, node_input: list[ShowcaseJob]):
                 job.storyboard_json = data.get("storyboard_json")
                 store.save_showcase_job(job)
                 logger.info("Controller updated storyboard status for job: %s", job.id)
+
+    # Process director proposal
+    director_proposal = ctx.state.get("director_proposal")
+    if director_proposal:
+        for job_id, data in director_proposal.items():
+            job = store.get_showcase_job(job_id)
+            if job:
+                if data.get("status"):
+                    job.status = ShowcaseJobStatus(data.get("status"))
+                if data.get("storyboard_json"):
+                    job.storyboard_json = data.get("storyboard_json")
+                store.save_showcase_job(job)
+                
+                # Also copy prompt sheet to gcs_mock if available
+                prompt_sheet_path = data.get("prompt_sheet_path")
+                prompt_sheet_filename = data.get("prompt_sheet_filename")
+                if prompt_sheet_path and prompt_sheet_filename:
+                    # Copy to gcs_mock/world-engine-showcase/job_id_prompt_sheet.txt
+                    dest_dir = os.path.join("gcs_mock", "world-engine-showcase")
+                    os.makedirs(dest_dir, exist_ok=True)
+                    dest_path = os.path.join(dest_dir, prompt_sheet_filename)
+                    try:
+                        import shutil
+                        if os.path.exists(prompt_sheet_path):
+                            shutil.copy2(prompt_sheet_path, dest_path)
+                            logger.info("Controller wrote prompt sheet to GCS: %s", dest_path)
+                    except Exception as e:
+                        logger.error("Controller failed to copy prompt sheet: %s", e)
+                
+                logger.info("Controller updated director status for job: %s", job.id)
 
     # 3. Process media proposal
     media_proposal = ctx.state.get("media_proposal")

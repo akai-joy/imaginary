@@ -8,8 +8,10 @@
   --line: #d3d8cd;
   --plum: #6d1f3c;
   --plum-deep: #511329;
-  --ochre: #a9781f;
+  --ochre: #8b600e;
   --good: #2f6d4f;
+  --blue: #2a5a70;
+  --lore: #785a3a;
 
   --serif: 'Hoefler Text', 'Iowan Old Style', Palatino, 'Palatino Linotype', Georgia, serif;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -139,6 +141,9 @@ button { font-family: inherit; cursor: pointer; }
 .tag-character { color: var(--plum); border-color: color-mix(in srgb, var(--plum) 30%, transparent); }
 .tag-plot { color: var(--ochre); border-color: color-mix(in srgb, var(--ochre) 35%, transparent); }
 .tag-faction { color: var(--good); border-color: color-mix(in srgb, var(--good) 30%, transparent); }
+.tag-location { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 30%, transparent); }
+.tag-lore { color: var(--lore); border-color: color-mix(in srgb, var(--lore) 35%, transparent); }
+.tag-other { color: var(--ink-soft); border-color: var(--line); }
 
 /* ---------- Lineage thread ---------- */
 .thread { flex: none; align-self: stretch; }

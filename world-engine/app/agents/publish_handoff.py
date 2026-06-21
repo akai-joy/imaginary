@@ -16,7 +16,7 @@ import logging
 import os
 import shutil
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import yaml
 from google import genai
@@ -160,7 +160,7 @@ Generate a structured JSON response matching the CaptionResponse schema."""
             caption=caption_with_hashtags,
             hashtags=caption_data.hashtags,
             contributor_ids=resolved_contributors,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         # 5. Build Instagram container payload

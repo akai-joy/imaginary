@@ -63,7 +63,7 @@ export default function Submit() {
           <span className="count">{body.length}/4000</span>
         </label>
 
-        <button className="btn-primary" type="submit" disabled={busy}>
+        <button className="btn-primary" type="submit" disabled={!title.trim() || !body.trim() || busy}>
           {busy ? 'Sending through the pipeline…' : 'Submit to canon'}
         </button>
       </form>

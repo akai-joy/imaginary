@@ -87,13 +87,20 @@ def scan_hidden_content(text: str) -> ModerationResponse | None:
         try:
             decoded = base64.b64decode(potential_b64, validate=True)
             decoded_str = decoded.decode("utf-8", errors="strict")
-            # Check if it decodes to readable ASCII string (ignoring common short words)
+            # Check if it decodes to readable ASCII string
             if all(32 <= ord(c) < 127 for c in decoded_str) and len(decoded_str) > 4:
-                return ModerationResponse(
-                    verdict=ModerationVerdict.BLOCK,
-                    category="hidden_content",
-                    reason=f"Detected and blocked base64 encoded message: '{decoded_str}'",
-                )
+                from app.core.security import detect_deterministic_injection
+                # Block if it has a space, injection keywords, or security keywords to prevent false positives on random strings
+                if (
+                    " " in decoded_str
+                    or detect_deterministic_injection(decoded_str)
+                    or any(kw in decoded_str.lower() for kw in ["secret", "code", "admin", "flag", "bypass", "ignore", "system", "override", "instruction", "block", "allow"])
+                ):
+                    return ModerationResponse(
+                        verdict=ModerationVerdict.BLOCK,
+                        category="hidden_content",
+                        reason=f"Detected and blocked base64 encoded message containing injection: '{decoded_str}'",
+                    )
         except Exception:
             pass
 
@@ -105,11 +112,17 @@ def scan_hidden_content(text: str) -> ModerationResponse | None:
             decoded = bytes.fromhex(potential_hex)
             decoded_str = decoded.decode("utf-8", errors="strict")
             if all(32 <= ord(c) < 127 for c in decoded_str) and len(decoded_str) > 4:
-                return ModerationResponse(
-                    verdict=ModerationVerdict.BLOCK,
-                    category="hidden_content",
-                    reason=f"Detected and blocked hex encoded message: '{decoded_str}'",
-                )
+                from app.core.security import detect_deterministic_injection
+                if (
+                    " " in decoded_str
+                    or detect_deterministic_injection(decoded_str)
+                    or any(kw in decoded_str.lower() for kw in ["secret", "code", "admin", "flag", "bypass", "ignore", "system", "override", "instruction", "block", "allow"])
+                ):
+                    return ModerationResponse(
+                        verdict=ModerationVerdict.BLOCK,
+                        category="hidden_content",
+                        reason=f"Detected and blocked hex encoded message containing injection: '{decoded_str}'",
+                    )
         except Exception:
             pass
 
@@ -142,20 +155,8 @@ def scan_hidden_content(text: str) -> ModerationResponse | None:
 
 def scan_prompt_injection(text: str) -> ModerationResponse | None:
     """Regex scan for direct or indirect prompt injection patterns."""
-    injection_patterns = [
-        r"(?i)ignore previous instructions",
-        r"(?i)you are now",
-        r"(?i)system override",
-        r"(?i)developer mode",
-        r"(?i)forget everything",
-        r"(?i)new directive",
-        r"(?i)ignore the above",
-        r"(?i)you must now",
-        r"(?i)fake system message",
-        r"(?i)tool-call directive",
-        r"(?i)skip moderation",
-    ]
-    for pattern in injection_patterns:
+    from app.core.security import INJECTION_PATTERNS
+    for pattern in INJECTION_PATTERNS:
         if re.search(pattern, text):
             stripped = re.sub(pattern, "[STRIPPED INJECTION]", text)
             return ModerationResponse(
@@ -242,9 +243,11 @@ Active Profile Flags (Flag if matching, e.g., mature theme handled non-explicitl
 {", ".join(flag_categories) if flag_categories else "None"}
 
 Content to evaluate:
+<untrusted_content>
 Title: {contrib.title}
 Body: {contrib.body}
-Original Raw Input: {raw_text}"""
+Original Raw Input: {raw_text}
+</untrusted_content>"""
 
     response = client.models.generate_content(
         model=model_name,
