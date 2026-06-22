@@ -478,6 +478,98 @@ def get_scene(scene_id: str):
     if not entry:
         raise HTTPException(status_code=404, detail="Scene/Canon entry not found")
 
+    if scene_id in ("canon_alistair", "canon_10254e4f-2552-4528-aa24-5fb891f200a8", "canon_10072aa0-ccd9-4bca-875b-9399a501efc2"):
+        # Custom override for the Alistair / Elynar storyline matching the custom video assets
+        choices = []
+        canon_entries = store.list_canon_entries()
+        children = [e for e in canon_entries if scene_id in e.derived_from]
+        for child in children:
+            choices.append({
+                "label": child.title,
+                "to": child.id
+            })
+
+        if scene_id == "canon_alistair":
+            panels = [
+                {
+                    "id": "alistair_p1",
+                    "prompt": "Wounded wizard Alistair dragging himself across a smoking battlefield.",
+                    "caption": "Silence falls over the scorched battlefield, the fires finally dying down.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/silence_falls_over_the_scorche.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                },
+                {
+                    "id": "alistair_p2",
+                    "prompt": "Alistair whispering a spell to a black crow.",
+                    "caption": "Alistair sends a message using his loyal crows, hoping it reaches safety.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/the_crows_deliver_the_message.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                },
+                {
+                    "id": "alistair_p3",
+                    "prompt": "Young girl Elynar looking up in a magic school courtyard.",
+                    "caption": "Elynar, Alistair's protege, remains hidden in the magic school.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                },
+                {
+                    "id": "alistair_p4",
+                    "prompt": "The magical crow landing and eyes flashing orange.",
+                    "caption": "The magical crow arrives, delivering Alistair's message of survival.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/she_is_in_a_magic_school_how.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                }
+            ]
+        elif scene_id == "canon_10254e4f-2552-4528-aa24-5fb891f200a8": # The Ash Oak
+            panels = [
+                {
+                    "id": "ash_oak_p1",
+                    "prompt": "Alistair drags himself to the roots of a giant ash oak tree on the smoky battlefield.",
+                    "caption": "Alistair drags himself to the single oak tree, the only survivor among the ashes.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/silence_falls_over_the_scorche.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                }
+            ]
+        else: # Alistair's Protege, Elynar
+            panels = [
+                {
+                    "id": "protege_p1",
+                    "prompt": "Elynar in the magic school courtyard.",
+                    "caption": "Far from the war, Elynar waits in safety at the magic school.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                },
+                {
+                    "id": "protege_p2",
+                    "prompt": "The black crow lands on the railing and eyes glow orange.",
+                    "caption": "The messenger crow arrives, its eyes glowing with Alistair's spell.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/she_is_in_a_magic_school_how.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                }
+            ]
+
+        return {
+            "id": entry.id,
+            "title": entry.title,
+            "logline": entry.body[:150] + "..." if len(entry.body) > 150 else entry.body,
+            "panels": panels,
+            "choices": choices
+        }
+
     from app.core.types import Storyboard, StoryboardScene
 
     # Reconstruct the tree containing this scene to find the ShowcaseJob and storyboard
