@@ -493,8 +493,8 @@ def get_scene(scene_id: str):
             panels = [
                 {
                     "id": "alistair_p1",
-                    "prompt": "Wounded wizard Alistair dragging himself across a smoking battlefield.",
-                    "caption": "Silence falls over the scorched battlefield, the fires finally dying down.",
+                    "prompt": "Wounded wizard Alistair hoists himself to the great oak and sits down with crows circling.",
+                    "caption": "Alistair hoists himself to the great oak and sits down with crows circling.",
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/silence_falls_over_the_scorche.mp4",
                     "audioUrl": None,
@@ -502,28 +502,37 @@ def get_scene(scene_id: str):
                 },
                 {
                     "id": "alistair_p2",
-                    "prompt": "Alistair whispering a spell to a black crow.",
-                    "caption": "Alistair sends a message using his loyal crows, hoping it reaches safety.",
+                    "prompt": "He tells the crows Elynar can't be in danger, she is in a magic school.",
+                    "caption": "He tells the crows Elynar can't be in danger, she is in a magic school.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/she_is_in_a_magic_school_how.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                },
+                {
+                    "id": "alistair_p3",
+                    "prompt": "Alistair tells the crows to deliver a message.",
+                    "caption": "He tells the crows to deliver a message.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/regenerate_this_one_the_wizar.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                },
+                {
+                    "id": "alistair_p4",
+                    "prompt": "The crows fly to Elynar and deliver the message.",
+                    "caption": "They fly to Elynar and deliver the message.",
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/the_crows_deliver_the_message.mp4",
                     "audioUrl": None,
                     "durationMs": 5200
                 },
                 {
-                    "id": "alistair_p3",
-                    "prompt": "Young girl Elynar looking up in a magic school courtyard.",
-                    "caption": "Elynar, Alistair's protege, remains hidden in the magic school.",
+                    "id": "alistair_p5",
+                    "prompt": "Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
+                    "caption": "But Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
-                    "audioUrl": None,
-                    "durationMs": 5200
-                },
-                {
-                    "id": "alistair_p4",
-                    "prompt": "The magical crow landing and eyes flashing orange.",
-                    "caption": "The magical crow arrives, delivering Alistair's message of survival.",
-                    "imageUrl": None,
-                    "videoUrl": "http://localhost:8000/cache/she_is_in_a_magic_school_how.mp4",
                     "audioUrl": None,
                     "durationMs": 5200
                 }
@@ -532,10 +541,28 @@ def get_scene(scene_id: str):
             panels = [
                 {
                     "id": "ash_oak_p1",
-                    "prompt": "Alistair drags himself to the roots of a giant ash oak tree on the smoky battlefield.",
-                    "caption": "Alistair drags himself to the single oak tree, the only survivor among the ashes.",
+                    "prompt": "Wounded wizard Alistair hoists himself to the great oak and sits down with crows circling.",
+                    "caption": "Alistair hoists himself to the great oak and sits down with crows circling.",
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/silence_falls_over_the_scorche.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                },
+                {
+                    "id": "ash_oak_p2",
+                    "prompt": "He tells the crows Elynar can't be in danger, she is in a magic school.",
+                    "caption": "He tells the crows Elynar can't be in danger, she is in a magic school.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/she_is_in_a_magic_school_how.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                },
+                {
+                    "id": "ash_oak_p3",
+                    "prompt": "Alistair tells the crows to deliver a message.",
+                    "caption": "He tells the crows to deliver a message.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/cache/regenerate_this_one_the_wizar.mp4",
                     "audioUrl": None,
                     "durationMs": 5200
                 }
@@ -544,19 +571,19 @@ def get_scene(scene_id: str):
             panels = [
                 {
                     "id": "protege_p1",
-                    "prompt": "Elynar in the magic school courtyard.",
-                    "caption": "Far from the war, Elynar waits in safety at the magic school.",
+                    "prompt": "The crows fly to Elynar and deliver the message.",
+                    "caption": "The crows fly to Elynar and deliver the message.",
                     "imageUrl": None,
-                    "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
+                    "videoUrl": "http://localhost:8000/cache/the_crows_deliver_the_message.mp4",
                     "audioUrl": None,
                     "durationMs": 5200
                 },
                 {
                     "id": "protege_p2",
-                    "prompt": "The black crow lands on the railing and eyes glow orange.",
-                    "caption": "The messenger crow arrives, its eyes glowing with Alistair's spell.",
+                    "prompt": "Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
+                    "caption": "But Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
                     "imageUrl": None,
-                    "videoUrl": "http://localhost:8000/cache/she_is_in_a_magic_school_how.mp4",
+                    "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
                     "audioUrl": None,
                     "durationMs": 5200
                 }
