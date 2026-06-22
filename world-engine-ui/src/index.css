@@ -400,9 +400,91 @@ button { font-family: inherit; cursor: pointer; }
   .caption p { font-size: 15px; } 
 }
 
-.view-toggle { display: flex; gap: 10px; margin: 20px 0 24px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
-.btn-toggle { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 16px; font-size: 14px; font-weight: 500; color: var(--ink-soft); transition: all 0.15s; }
-.btn-toggle:hover { color: var(--ink); border-color: var(--ink-soft); }
-.btn-toggle.active { background: var(--plum); border-color: var(--plum); color: #fff; }
+.player-page-immersive {
+  background: var(--paper);
+  min-height: 100vh;
+  width: 100%;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.immersive-header {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+.back-link {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: color 0.15s;
+}
+.back-link:hover {
+  color: var(--plum);
+}
+.view-toggle-minimal {
+  display: flex;
+  gap: 8px;
+}
+.btn-toggle-minimal {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-toggle-minimal:hover {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+}
+.btn-toggle-minimal.active {
+  color: var(--plum);
+  font-weight: 600;
+  border-color: color-mix(in srgb, var(--plum) 35%, transparent);
+}
+.list-content {
+  width: 100%;
+  max-width: 720px;
+  animation: fade 0.5s ease;
+}
+.detail-head-immersive {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.detail-head-immersive h1 {
+  font-family: var(--serif);
+  font-size: 28px;
+  font-weight: 600;
+  margin: 4px 0;
+}
+.detail-summary {
+  color: var(--ink-soft);
+  margin: 6px 0 0;
+}
+.state-immersive {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+
 
 

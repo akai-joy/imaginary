@@ -28,52 +28,61 @@ export default function StorylineDetail() {
 
   if (error)
     return (
-      <div className="state state-error">
-        <p>{error}</p>
-        <button className="btn-primary" onClick={() => setReloadKey((k) => k + 1)}>Try again</button>
+      <div className="player-page-immersive">
+        <div className="state state-immersive error">
+          <p className="msg">{error}</p>
+          <button className="btn-toggle-minimal active" onClick={() => setReloadKey((k) => k + 1)}>Try again</button>
+        </div>
       </div>
     )
-  if (!story) return <p className="state muted">Loading…</p>
+  if (!story)
+    return (
+      <div className="player-page-immersive">
+        <p className="msg">Loading storyline…</p>
+      </div>
+    )
 
   return (
-    <div className="page detail">
-      <Link to="/" className="back">← All storylines</Link>
-
-      <header className="detail-head">
-        <div>
-          <span className={`tag tag-${story.type}`}>{story.type}</span>
-          <h1>{story.title}</h1>
-          <p className="detail-summary">{story.summary}</p>
-          <p className="meta">
-            <span>v{story.version}</span>
-            <span className="dot">·</span>
-            <span>{story.member_count} nodes</span>
-            <span className="dot">·</span>
-            <span>score {story.composite_score}</span>
-          </p>
+    <div className="player-page-immersive">
+      <header className="immersive-header">
+        <Link to="/" className="back-link">
+          ← Back to storylines
+        </Link>
+        <div className="view-toggle-minimal">
+          <button
+            className={`btn-toggle-minimal ${viewMode === 'player' ? 'active' : ''}`}
+            onClick={() => setViewMode('player')}
+          >
+            🎬 Play Storyline
+          </button>
+          <button
+            className={`btn-toggle-minimal ${viewMode === 'list' ? 'active' : ''}`}
+            onClick={() => setViewMode('list')}
+          >
+            📜 Lineage List
+          </button>
         </div>
-        <VoteButton treeId={story.tree_id} initialTotal={story.vote_total} initialVoted={story.voted} />
       </header>
-
-      <div className="view-toggle">
-        <button
-          className={`btn-toggle ${viewMode === 'player' ? 'active' : ''}`}
-          onClick={() => setViewMode('player')}
-        >
-          🎬 Play Branching Storyline
-        </button>
-        <button
-          className={`btn-toggle ${viewMode === 'list' ? 'active' : ''}`}
-          onClick={() => setViewMode('list')}
-        >
-          📜 View Lineage List
-        </button>
-      </div>
 
       {viewMode === 'player' ? (
         <ScenePlayer startSceneId={story.tree_id} />
       ) : (
-        <>
+        <div className="list-content">
+          <header className="detail-head-immersive">
+            <div className="detail-info">
+              <span className={`tag tag-${story.type}`}>{story.type}</span>
+              <h1>{story.title}</h1>
+              <p className="detail-summary">{story.summary}</p>
+              <p className="meta">
+                <span>v{story.version}</span>
+                <span className="dot">·</span>
+                <span>{story.member_count} nodes</span>
+                <span className="dot">·</span>
+                <span>score {story.composite_score}</span>
+              </p>
+            </div>
+            <VoteButton treeId={story.tree_id} initialTotal={story.vote_total} initialVoted={story.voted} />
+          </header>
           <h2 className="section-label">Canon, in order of lineage</h2>
           <ol className="node-list">
             {story.nodes?.map((n) => (
@@ -102,7 +111,7 @@ export default function StorylineDetail() {
               </li>
             ))}
           </ol>
-        </>
+        </div>
       )}
     </div>
   )

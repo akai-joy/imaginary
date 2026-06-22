@@ -19,10 +19,17 @@ export default function App() {
         }
       >
         <Route index element={<Storylines />} />
-        <Route path="story/:treeId" element={<StorylineDetail />} />
         <Route path="showcase" element={<Showcase />} />
         <Route path="submit" element={<Submit />} />
       </Route>
+      <Route
+        path="story/:treeId"
+        element={
+          <ProtectedRoute>
+            <StorylineDetail />
+          </ProtectedRoute>
+        }
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
