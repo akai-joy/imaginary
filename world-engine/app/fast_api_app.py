@@ -212,7 +212,7 @@ def get_storyline(treeId: str, authorization: Optional[str] = Header(None)):
         if entry:
             loaded_entries.append(entry)
 
-    loaded_entries.sort(key=lambda x: x.created_at)
+    loaded_entries.sort(key=lambda x: x.created_at.replace(tzinfo=None) if x.created_at and hasattr(x.created_at, 'replace') else x.created_at)
 
     nodes = []
     scores = []
