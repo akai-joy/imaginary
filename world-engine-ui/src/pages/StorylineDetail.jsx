@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useApi } from '../api'
 import Thread from '../components/Thread'
 import VoteButton from '../components/VoteButton'
+import ScenePlayer from '../components/ScenePlayer'
 
 export default function StorylineDetail() {
   const { treeId } = useParams()
@@ -10,6 +11,7 @@ export default function StorylineDetail() {
   const [story, setStory] = useState(null)
   const [error, setError] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [viewMode, setViewMode] = useState('player')
 
   useEffect(() => {
     let live = true
@@ -53,34 +55,55 @@ export default function StorylineDetail() {
         <VoteButton treeId={story.tree_id} initialTotal={story.vote_total} initialVoted={story.voted} />
       </header>
 
-      <h2 className="section-label">Canon, in order of lineage</h2>
-      <ol className="node-list">
-        {story.nodes?.map((n) => (
-          <li key={n.id} className="node">
-            <Thread branched={Boolean(n.derived_from && n.derived_from.length)} tall />
-            <div className="node-body">
-              <div className="node-top">
-                <h3 className="node-title">{n.title}</h3>
-                <span className={`tag tag-${n.type}`}>{n.type}</span>
-              </div>
-              <p className="node-text">{n.body}</p>
-              <p className="meta">
-                <span className="contributor">@{n.contributor}</span>
-                <span className="dot">·</span>
-                <span>{n.id}</span>
-                <span className="dot">·</span>
-                <span>v{n.version}</span>
-                {n.derived_from?.length > 0 && (
-                  <>
+      <div className="view-toggle">
+        <button
+          className={`btn-toggle ${viewMode === 'player' ? 'active' : ''}`}
+          onClick={() => setViewMode('player')}
+        >
+          🎬 Play Branching Storyline
+        </button>
+        <button
+          className={`btn-toggle ${viewMode === 'list' ? 'active' : ''}`}
+          onClick={() => setViewMode('list')}
+        >
+          📜 View Lineage List
+        </button>
+      </div>
+
+      {viewMode === 'player' ? (
+        <ScenePlayer startSceneId={story.tree_id} />
+      ) : (
+        <>
+          <h2 className="section-label">Canon, in order of lineage</h2>
+          <ol className="node-list">
+            {story.nodes?.map((n) => (
+              <li key={n.id} className="node">
+                <Thread branched={Boolean(n.derived_from && n.derived_from.length)} tall />
+                <div className="node-body">
+                  <div className="node-top">
+                    <h3 className="node-title">{n.title}</h3>
+                    <span className={`tag tag-${n.type}`}>{n.type}</span>
+                  </div>
+                  <p className="node-text">{n.body}</p>
+                  <p className="meta">
+                    <span className="contributor">@{n.contributor}</span>
                     <span className="dot">·</span>
-                    <span className="derived">⌥ builds on {n.derived_from.join(', ')}</span>
-                  </>
-                )}
-              </p>
-            </div>
-          </li>
-        ))}
-      </ol>
+                    <span>{n.id}</span>
+                    <span className="dot">·</span>
+                    <span>v{n.version}</span>
+                    {n.derived_from?.length > 0 && (
+                      <>
+                        <span className="dot">·</span>
+                        <span className="derived">⌥ builds on {n.derived_from.join(', ')}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
     </div>
   )
 }

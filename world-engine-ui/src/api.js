@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useAuth } from './auth'
-import { mockStorylines, mockShowcase } from './mock'
+import { mockStorylines, mockShowcase, DEMO } from './mock'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 export const apiMock = !API_BASE
@@ -41,6 +41,12 @@ export function useApi() {
       async getStoryline(treeId) {
         if (apiMock) return mockState.storylines.find((s) => s.tree_id === treeId) || null
         return request(`/canon/storylines/${treeId}`, { token: await getToken() })
+      },
+
+      // GET /scenes/:id -> Scene
+      async getScene(id) {
+        if (apiMock) return DEMO[id] || DEMO.eldoria
+        return request(`/scenes/${id}`, { token: await getToken() })
       },
 
       // POST /vote { tree_id } -> { ok, vote_total, voted }

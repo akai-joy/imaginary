@@ -73,6 +73,8 @@ app.description = "API for interacting with the Agent world-engine"
 from fastapi.staticfiles import StaticFiles
 os.makedirs("gcs_mock", exist_ok=True)
 app.mount("/gcs_mock", StaticFiles(directory="gcs_mock"), name="gcs_mock")
+os.makedirs("cache", exist_ok=True)
+app.mount("/cache", StaticFiles(directory="cache"), name="cache")
 
 
 def get_user_id_from_token(authorization: Optional[str], strict: bool = False) -> str:
@@ -443,6 +445,145 @@ def post_internal_run_showcase(payload: RunShowcasePayload):
     except Exception as e:
         logger.error("Failed to run showcase workflow in internal handler: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_media_urls_for_scene(scene, media_type: str) -> tuple[str | None, str | None]:
+    import hashlib
+    prompt = scene.optimized_prompt if scene.optimized_prompt else scene.visual_description
+    if not prompt:
+        prompt = scene.visual_description
+
+    # Compile prompt style formatting matching media_node
+    if not scene.optimized_prompt:
+        if media_type == "comic":
+            prompt = f"{scene.visual_description}, high quality fantasy comic book style illustration, vibrant colors"
+        else:
+            prompt = f"{scene.visual_description}, cinematography, 9:16 vertical video"
+
+    h = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    image_path = os.path.join("cache", f"{h}.png")
+    video_path = os.path.join("cache", f"{h}.mp4")
+
+    image_url = f"http://localhost:8000/cache/{h}.png" if os.path.exists(image_path) else None
+    video_url = f"http://localhost:8000/cache/{h}.mp4" if os.path.exists(video_path) else None
+
+    return image_url, video_url
+
+
+@app.get("/scenes/{scene_id}")
+def get_scene(scene_id: str):
+    """GET /scenes/{scene_id} -> Scene model for the explorable-graph player."""
+    store = get_store()
+    entry = store.get_canon_entry(scene_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Scene/Canon entry not found")
+
+    from app.core.types import Storyboard, StoryboardScene
+
+    # Reconstruct the tree containing this scene to find the ShowcaseJob and storyboard
+    canon_entries = store.list_canon_entries()
+    assembled = assemble_trees(canon_entries)
+    
+    # Find the tree containing this entry
+    tree_root_id = None
+    for root_id, member_ids in assembled:
+        if scene_id in member_ids:
+            tree_root_id = root_id
+            break
+
+    job = None
+    storyboard = None
+    if tree_root_id:
+        # Check if there is an existing showcase job for this tree
+        jobs = store.list_showcase_jobs()
+        for j in jobs:
+            if j.tree_id == tree_root_id and j.storyboard_json:
+                job = j
+                try:
+                    storyboard = Storyboard.model_validate_json(j.storyboard_json)
+                except Exception:
+                    pass
+                break
+
+    # Build choices from children nodes
+    choices = []
+    children = [e for e in canon_entries if scene_id in e.derived_from]
+    for child in children:
+        choices.append({
+            "label": child.title,
+            "to": child.id
+        })
+
+    # Map storyboard scenes to panels using the text overlap heuristic
+    panels = []
+    matched_scenes = []
+
+    if storyboard and job:
+        # Build tree entries list for matching
+        tree_entries = []
+        member_ids_for_tree = []
+        for root_id, m_ids in assembled:
+            if root_id == tree_root_id:
+                member_ids_for_tree = m_ids
+                break
+
+        for m_id in member_ids_for_tree:
+            e = store.get_canon_entry(m_id)
+            if e:
+                tree_entries.append(e)
+
+        if tree_entries:
+            # Group scenes by closest canon entry
+            node_scenes = {e.id: [] for e in tree_entries}
+            for s in storyboard.scenes:
+                best_entry_id = tree_entries[0].id
+                best_score = -1
+                scene_text = f"{s.visual_description} {s.caption}".lower()
+                scene_words = set(w for w in scene_text.split() if len(w) > 3)
+
+                for e in tree_entries:
+                    entry_text = f"{e.title} {e.body}".lower()
+                    entry_words = set(w for w in entry_text.split() if len(w) > 3)
+                    overlap = len(scene_words.intersection(entry_words))
+                    if overlap > best_score:
+                        best_score = overlap
+                        best_entry_id = e.id
+
+                node_scenes[best_entry_id].append(s)
+
+            matched_scenes = node_scenes.get(scene_id, [])
+
+    if matched_scenes:
+        for idx, s in enumerate(matched_scenes):
+            image_url, video_url = get_media_urls_for_scene(s, job.media_type)
+            panels.append({
+                "id": f"{scene_id}_p_{idx}",
+                "prompt": s.visual_description,
+                "caption": s.caption,
+                "imageUrl": image_url,
+                "videoUrl": video_url,
+                "audioUrl": None,
+                "durationMs": 5200
+            })
+    else:
+        # Fallback panel from the entry itself if no storyboard match or job is not yet run
+        panels.append({
+            "id": f"{scene_id}_fallback",
+            "prompt": f"Illustration of {entry.title}: {entry.body}",
+            "caption": entry.body,
+            "imageUrl": None,
+            "videoUrl": None,
+            "audioUrl": None,
+            "durationMs": 5200
+        })
+
+    return {
+        "id": entry.id,
+        "title": entry.title,
+        "logline": entry.body[:150] + "..." if len(entry.body) > 150 else entry.body,
+        "panels": panels,
+        "choices": choices
+    }
 
 
 @app.get("/showcase")

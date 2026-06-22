@@ -91,3 +91,59 @@ export const mockShowcase = [
     scenes: ['The tide pulls back.', 'Stone shelves break the surface.', 'A ledger, dry for the first time in a century.'],
   },
 ]
+
+export const DEMO = {
+  eldoria: {
+    id: "eldoria",
+    title: "The Warmth of Eldoria",
+    logline:
+      "A weary traveler finds comfort in the peaceful mountain village of Eldoria — from its steaming hot springs to its cozy tavern hearth.",
+    panels: [
+      { id: "p1", caption: "At the edge of the white pass, the traveler saw it at last — Eldoria, glowing gold against the dark.",
+        prompt: "Wide shot. A weary traveler on a snow-covered mountain path; the golden lights of Eldoria nestle among snowy peaks. Dusk, deep blues and purples." },
+      { id: "p2", caption: "The village lay cupped in the valley, steam rising from the springs like breath on the cold air.",
+        prompt: "High-angle establishing shot. Eldoria in a snowy valley, rustic cabins, warm windows, thick steam from mineral hot springs. Starry sky." },
+      { id: "p3", kind: "video", caption: "She sank into the hot spring, and the journey's ache lifted into the steam and the stars.",
+        prompt: "Medium shot. The traveler soaks in a stone hot spring, eyes closed; ethereal steam drifts upward, catching soft light. Brilliant starry sky." },
+      { id: "p4", caption: "The tavern door gave way to warmth — light, voices, the smell of something good.",
+        prompt: "Low-angle dynamic shot. The traveler pushes open a heavy wooden door into a bustling warm tavern; golden light pours out." },
+      { id: "p5", caption: "By the hearth she cradled the mug, and for the first time in weeks, she smiled.",
+        prompt: "Medium close-up. The traveler in a plush armchair by a roaring stone hearth, holding a steaming mug, gentle smile, warm firelight." },
+      { id: "p6", caption: "Snow fell soft over the sleeping village, and Eldoria kept its quiet, glowing watch.",
+        prompt: "POV from inside a cabin looking out a wooden window; soft snow over the sleeping village at night, glowing windows, cool blue tones." },
+    ],
+    choices: [
+      { label: "Stay by the hearth a while longer", to: "hearth" },
+      { label: "Set out over the pass at first light", to: "pass" },
+    ],
+  },
+  hearth: {
+    id: "hearth", title: "Tales by the Hearth",
+    logline: "The fire burns low, and a stranger's story rewrites the traveler's route.",
+    panels: [
+      { id: "h1", caption: "An old fisher pulled up a stool and began a tale of the lake that never freezes.",
+        prompt: "Cozy tavern interior, close on an old fisher telling a story by firelight, attentive faces, warm shadows." },
+      { id: "h2", caption: "By the time the fire burned low, she had a map drawn on a napkin — and a reason to stay.",
+        prompt: "Close-up of a napkin with a rough ink map, a mug ring staining one corner, a hand resting beside it." },
+    ],
+    choices: [
+      { label: "Follow the napkin map at dawn", to: "pass" },
+      { label: "Let Eldoria hold you one more night", to: "eldoria" },
+    ],
+  },
+  pass: {
+    id: "pass", title: "Over the Pass",
+    logline: "The climb out of the valley opens onto a world the traveler hasn't named yet.",
+    panels: [
+      { id: "s1", caption: "Dawn broke hard and bright; the pass climbed into a sky scrubbed clean of cloud.",
+        prompt: "Wide shot at dawn. A steep snowy pass climbing into a clear bright sky, a small figure ascending." },
+      { id: "s2", caption: "At the summit the world fell away on every side — and somewhere below, a new valley waited.",
+        prompt: "Summit panorama. The world falls away on every side; far below a new green valley beyond the snowline." },
+    ],
+    choices: [
+      { label: "Descend toward the new valley", to: null },
+      { label: "Look back at Eldoria one last time", to: "eldoria" },
+    ],
+  },
+}
+

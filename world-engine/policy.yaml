@@ -12,13 +12,13 @@ active_profile: default        # strict | default | permissive
 # Models (cheap where possible; Pro only for synthesis-quality work)
 # ---------------------------------------------------------------------------
 models:
-  router:          gemini-3.5-flash
-  moderation:      gemini-3.5-flash
-  continuity:      gemini-3.5-flash
-  scoring:         gemini-3.5-flash
-  narrator:        gemini-3.5-flash
-  storyboard:      gemini-3.5-flash
-  security_screen: gemini-3.5-flash     # cheap pre-screen; NOT the only defense
+  router:          gemini-flash
+  moderation:      gemini-flash
+  continuity:      gemini-flash
+  scoring:         gemini-flash
+  narrator:        gemini-pro
+  storyboard:      gemini-pro
+  security_screen: gemini-flash-lite     # cheap pre-screen; NOT the only defense
 
 # ---------------------------------------------------------------------------
 # Content & safety (Moderation node)
@@ -67,12 +67,12 @@ showcase:
     default: comic                       # every qualifying tree gets a cheap comic
     reel_for_top_n: 1                    # ONLY the single top tree per cycle gets a reel
     comic:
-      provider: imagen
+      provider: openai                   # openai (gpt-image-1) | imagen
       panels: { min: 6, max: 8 }
     reel:
       provider: veo
       model_tier: lite                   # lite | fast | quality
-      audio: false                       # off by default (cheaper)
+      audio: false                       # Veo silent; ElevenLabs VO layered on top
       aspect_ratio: "9:16"
       max_clip_seconds: 8                # Veo hard limit per generation
       scenes: 3                          # chained -> ~24s reel
@@ -81,6 +81,37 @@ showcase:
     mode: mock                           # mock | live  (live is OUT OF SCOPE)
     gcs_bucket: world-engine-showcase
     gcs_prefix_per_job: true
+
+# ---------------------------------------------------------------------------
+# Media generation providers (keys come from Secret Manager, never inline)
+# ---------------------------------------------------------------------------
+media_providers:
+  image:
+    provider: openai                     # openai | imagen
+    model: gpt-image-1                   # gpt-image-1 | gpt-image-1-mini
+    quality: medium                      # low | medium | high
+    size_landscape: "1536x1024"
+    size_portrait: "1024x1536"
+    secret: OPENAI_API_KEY
+  voice:
+    provider: elevenlabs
+    model: eleven_multilingual_v2        # set to your preferred ElevenLabs model
+    secret: ELEVENLABS_API_KEY
+    settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0 }
+  video:
+    provider: veo
+    model_tier: lite
+    aspect_ratio: "9:16"
+    silent: true                         # narration comes from the voice provider
+  # Per-character voices so a character sounds the same everywhere it appears.
+  voice_registry:
+    _narrator: "REPLACE_WITH_VOICE_ID"
+    # <character_canon_id>: "<elevenlabs_voice_id>"
+  # Per-panel media tiering for the explorable-graph scenes.
+  panel_tiering:
+    default_kind: image                  # every panel = image + VO
+    video_when: key                      # only panels the storyboard flags `key` get Veo
+    max_video_panels_per_scene: 2
 
 # ---------------------------------------------------------------------------
 # Security guardrail Plugin (registered once on the Runner)

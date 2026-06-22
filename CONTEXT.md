@@ -46,11 +46,11 @@ Ordered nodes:
    a reel), each with a visual description and a caption line.
 3. **Moderation (re-check)** — the storyboard passes back through the Moderation node
    plus the **Media content policy** below, BEFORE any image/video is generated.
-4. **Media** — `comic` → one image per panel via Imagen with a consistent style
-   directive, composed into a comic page; `reel` → each scene via Veo in **9:16**,
-   **≤8s per clip** chained to target length, model tier from config (default the
-   cost-optimized Lite variant; audio toggle in config). Cache every asset; never
-   regenerate identical content.
+4. **Media** — generate through the provider interfaces (see "Media generation
+   providers"): `comic` → one image per panel via the image provider (default OpenAI
+   `gpt-image-1`) with a consistent style directive; `reel` → each scene via Veo in
+   **9:16**, **≤8s per clip** chained, run **silent** with the ElevenLabs VO layered on
+   top. Cache every asset; never regenerate identical content.
 5. **Publish/Handoff** — write an auto-generated caption + hashtags, save the final
    asset to a **GCS bucket** with a public URL, build the Instagram content-publishing
    container payload, then **stop at the review gate**: log the payload and mark the
@@ -59,6 +59,47 @@ Ordered nodes:
 **Cost control (deliberate):** comics are cheap, so every qualifying tree gets one;
 Veo is reserved for the single top tree per cycle. Veo clips carry an embedded
 SynthID watermark (note this as a responsible-AI point in the writeup).
+
+## Media generation providers
+All generation goes through provider interfaces (swap via `policy.yaml`; keys in Secret
+Manager — never in code, prompts, or the client):
+- **ImageProvider** — default **OpenAI `gpt-image-1`** (Images API
+  `/v1/images/generations`; sizes 1024×1024 / 1536×1024 / 1024×1536; quality
+  low|medium|high; returns b64/URL; embeds **C2PA** provenance). **Imagen** kept as a
+  drop-in alternative for a fully Google-native build (capstone hedge).
+- **VoiceProvider** — **ElevenLabs** TTS (`/v1/text-to-speech/{voice_id}`); per-character
+  `voice_id` from the voice registry; returns mp3. Generated once and cached, exactly like
+  the existing podcast pipeline.
+- **VideoProvider** — **Veo** (9:16, ≤8s/clip, chained; run **silent** so the ElevenLabs VO
+  is layered on top; SynthID embedded).
+
+Each provider returns bytes/URL; the pipeline uploads to Firebase Storage / GCS and records
+the URL on a `MediaAsset`. Secrets: `OPENAI_API_KEY`, `ELEVENLABS_API_KEY`, Google creds —
+all from Secret Manager, server-side only.
+
+## Scene model & per-node media pipeline (explorable graph)
+The explorable-graph player consumes **Scenes** (one per canon node):
+- **Scene**: `id, title, logline, panels[], choices[]`.
+- **Panel**: `id, prompt, caption (narration text), speaker, kind(image|video),
+  image_url, video_url, audio_url, duration_ms`.
+- **Choice**: `{ label, to(scene_id | null) }` — edges are `derived_from` links; `null` = ending.
+
+**Voice registry**: `voices = { <character_canon_id>: <elevenlabs_voice_id>, "_narrator": <id> }`.
+The Storyboard/Narrator step tags each panel's caption with a `speaker`; the pipeline picks the
+matching voice so characters sound consistent across the whole world.
+
+**Generate at commit time, not play time.** When a node's canon is finalized, the async
+pipeline: (1) builds panels from the storyboard job, (2) re-checks them through Moderation + the
+Media content policy, (3) generates each panel's image (or video for tiered panels) and its VO,
+(4) uploads + caches keyed by `(node_id, version, panel_id, kind)`, (5) writes `MediaAsset`s.
+Regenerate only when the node's version changes — play is instant streaming of cached URLs.
+
+**Per-panel tiering** (`policy.yaml`): every panel gets an image (cheap) + VO; only panels
+flagged `key` by the storyboard agent (or on the top-voted path) graduate to a Veo video.
+
+**Player contract** — `GET /scenes/:id` returns a Scene in the shape above (browser → API →
+Firestore; never browser → Firestore directly). A `job_to_scene` mapper converts a storyboard
+job (title, logline, `Scene N` prompts) into `panels[]`, attaching the cached media URLs.
 
 ## Tech conventions
 - Python, ADK 2.0 graph workflow API. **One module per agent** under `agents/`.
@@ -85,9 +126,11 @@ SynthID watermark (note this as a responsible-AI point in the writeup).
   composite_score`.
 - **ShowcaseJob**: `id, tree_id, media_type(comic|reel),
   status(queued|storyboarded|blocked|generated|published_mock), created_at`.
-- **MediaAsset**: `id, job_id, tree_id, kind(comic|reel), gcs_url, caption, hashtags,
-  contributor_ids, created_at`. Links the finished asset back to every contributor in
-  the tree (attribution).
+- **MediaAsset**: `id, job_id, tree_id, node_id, panel_id,
+  kind(comic|reel|image|video|voice), image_url, video_url, audio_url, caption, hashtags,
+  contributor_ids, created_at`. Links the finished asset back to every contributor (attribution).
+- **Scene / Panel / Choice**: see "Scene model & per-node media pipeline" — the unit the
+  explorable-graph player consumes.
 - **Store**: SQLite locally (`world.db`); Firestore in the GCP deployment. Hide both
   behind a single `CanonStore` interface so they back the same API.
 
