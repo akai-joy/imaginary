@@ -74,9 +74,22 @@ def ingest_controller_node(ctx: Context, node_input: Contribution):
                 body=new_entry_data["body"],
                 contributor_id=new_entry_data["contributor_id"],
                 derived_from=new_entry_data["derived_from"],
+                references=new_entry_data.get("references", []),
                 version=new_entry_data["version"],
                 created_at=datetime.fromisoformat(new_entry_data["created_at"]),
             )
+
+            # Honour the lineage/refs the contributor chose in the UI: trusted structure,
+            # applied deterministically here rather than inferred by the Provenance LLM.
+            if contrib.derived_from:
+                new_entry.derived_from = list(
+                    dict.fromkeys([*new_entry.derived_from, *contrib.derived_from])
+                )
+            if contrib.references:
+                new_entry.references = list(
+                    dict.fromkeys([*new_entry.references, *contrib.references])
+                )
+
             store.save_canon_entry(new_entry)
             logger.info("Controller saved CanonEntry: %s", new_entry.id)
 

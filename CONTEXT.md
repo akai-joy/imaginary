@@ -17,6 +17,42 @@ Built for the Kaggle 5-Day AI Agents Intensive (Vibe Coding) capstone.
 Stack: **ADK 2.0 graph workflow API**, **agents-cli**, **Gemini** (driven via
 Antigravity), deployed to **Google Cloud Agent Runtime**.
 
+## Why this exists (the framing — read first)
+Video games hand you a world someone else authored. **World Engine is the opposite:
+humans and AI co-author a living world together, and anyone can let their imagination
+run wild — within clear perimeters of safety and compliance.**
+
+The agents are **not** the point. They are the **referee and editor that make open,
+safe co-creation possible at all.** You cannot let strangers collectively author a
+shared world without moderation, continuity, provenance, and safety running at machine
+speed: a human editorial team can't scale to it, and an unguarded LLM can't be trusted
+with it. So the entire proposal→controller + security-plugin investment is not a side
+feature — **it is the infrastructure of trust that lets the fun exist.** The AI is the
+**referee, not the author.**
+
+The research question to lead with:
+> *Can a crowd and a set of autonomous agents co-author a coherent, safe fictional world
+> under a time-boxed creative constraint — with the AI as referee, not author?*
+
+**Seasons / limited-time themed drops (the participation loop).** A world is a
+**limited-time themed drop** (e.g. "Medieval Wizards"). A theme is a creative prompt —
+it kills the blank-canvas problem, concentrates the crowd into a shared *event*
+(density is what collaborative worldbuilding needs), holds the art style and moderation
+profile coherent, and gives "done" a meaning: when the drop closes, the world is
+immortalized as a **season-finale showcase anthology** and the next theme opens. The
+*contribution window* is scarce; the *finished world is not thrown away* — it archives
+into a read-only collectible. See "World / Season lifecycle" below.
+
+**Design lineage (two inspirations).** (1) The Surrealist **cadavre exquis** — a story assembled
+from folded fragments, authored by no one and everyone, where the magic lives in the *seams*. Its
+mechanic is the **fold**: each contributor sees only the sliver they attach to, not the whole. (2)
+The opening line of *The Dark Tower* — proof that one sentence with pursuit-pressure can open an
+entire world. The truest one-line pitch for this project: **an exquisite corpse that cannot
+collapse into chaos or harm — because the agents hold the coherence and safety the players can't
+see.** The AI is the invisible referee that lets the fold stay surprising *and* safe. Two design
+rules fall out of this and are binding below: worlds open on an **`opening_line`** (not a theme
+noun), and **forking inherits fragment-context, not the whole canon** (the fold).
+
 ## Architecture — graph workflow
 Ordered nodes (an edge runs left→right; Moderation can halt the pipeline):
 
@@ -113,14 +149,33 @@ job (title, logline, `Scene N` prompts) into `panels[]`, attaching the cached me
   (enum + reasons), not prose.
 
 ## Data model
-- **Contribution**: `id, author_id, type(character|location|faction|plot|lore|other),
+> **World scoping:** every `Contribution`, `CanonEntry`, `Vote`, `StorylineTree`, and
+> `ShowcaseJob` carries a `world_id`. All Map / codex / storyline / showcase queries filter by
+> the active world. A world is one themed seasonal drop (see "World / Season lifecycle").
+- **World**: `id, theme, opening_line, art_style_directive, moderation_profile,
+  status(active|archived), opens_at, closes_at, created_at`. A world opens on a single
+  **`opening_line`** — a Dark-Tower-grade seed sentence carrying pursuit-pressure
+  (*"The man in black fled across the desert, and the gunslinger followed."*), **not** a bland
+  theme blurb: a great seed is a line that makes "what happens next" unbearable. It seeds the
+  intake/narrator prompt and a soft "on-theme?" continuity signal. `art_style_directive` feeds the
+  media-generation prompts so a drop looks coherent; `moderation_profile` selects the `policy.yaml`
+  profile for that world.
+- **Contribution**: `id, author_id, world_id, type(character|location|beast|spell|faction|plot|lore|other),
   title, body, created_at, status(pending|blocked|flagged|accepted|rejected),
-  references(list[canon_id])`.
-- **CanonEntry**: `id, type, title, body, contributor_id, derived_from(list[canon_id]),
-  version, created_at`.
+  references(list[canon_id]), derived_from(list[canon_id])`. `references` = the cast/setting the
+  contributor selected from the canon; `derived_from` = explicit fork/continue lineage chosen in
+  the UI (**trusted structure** — the controller honours it directly; content is still moderated).
+  Empty `derived_from` ⇒ a brand-new root.
+- **CanonEntry**: `id, type(character|location|beast|spell|faction|plot|lore), title, body,
+  contributor_id, derived_from(list[canon_id]), references(list[canon_id]), version, created_at,
+  map_meta`. `map_meta` is set **only for locations**, written by the Cartographer node via the
+  controller (never by a user): `{ x, y, region, near(list[canon_id]) }`.
 - **LedgerEntry**: `contribution_id, author_id, points_delta, reason, created_at`.
   **Points only.** No currency, wallets, tokens, or payouts.
 - **Vote**: `id, voter_id, tree_id, weight, created_at`. One human vote on a story tree.
+- **Discovery**: `user_id, canon_id, discovered_at`. Drives the personal fog-of-war overlay. A
+  node is *revealed* globally the moment it is `accepted`; it becomes *discovered* for a given
+  user when they contribute it or open its detail. One shared canon, per-user exploration state.
 - **StorylineTree**: a derived view — a root `CanonEntry` plus all descendants reachable
   via `derived_from` edges; carries `tree_id, root_id, member_ids, vote_total,
   composite_score`.
@@ -133,6 +188,83 @@ job (title, logline, `Scene N` prompts) into `panels[]`, attaching the cached me
   explorable-graph player consumes.
 - **Store**: SQLite locally (`world.db`); Firestore in the GCP deployment. Hide both
   behind a single `CanonStore` interface so they back the same API.
+
+## World / Season lifecycle (limited-time themed drops)
+A **World** is one **limited-time themed drop** — the unit of participation. Everything in the
+Living World layer below is scoped to the active world by `world_id`.
+
+**Lifecycle (`World.status`):**
+- **active** — the contribution window is open. People submit, fork, vote, and the themed map
+  fills in over the drop. The `opening_line` + `art_style_directive` keep contributions and
+  generated media on-theme and visually coherent.
+- **archived** — the window has closed. The world becomes a **read-only collectible**; no new
+  contributions or votes. The active map/codex/storylines simply read the archived world.
+
+**Closing a drop (deterministic, controller-owned).** The window is **time-boxed**
+(`opens_at`/`closes_at`) — that is the scarcity / event energy. "Fully forked" (saturation:
+vote velocity falls, or every root reaches N forks) is an **accelerator and a finale signal**,
+**not** the sole gate — never hang the lifecycle on it alone. On close, a deterministic lifecycle
+controller: (1) flips `status` to `archived`, (2) fires the **Showcase subgraph as a season-finale
+anthology** of the world's top trees, (3) opens the next themed drop. Worlds are **archived, never
+deleted** — the finished world is the reward, the live window is the scarcity.
+
+**Seasons are isolated by default.** No cross-world canon. A "character from Season 1 cameos in
+Season 3" multiverse hook is a deliberate *later* feature — do not build cross-world links now.
+
+**Caveat (design honestly):** themed drops live or die on **crowd density** — a world that opens
+to three people feels dead. For the capstone, seed the world and run a live demo; as a product,
+match drop cadence to real audience size.
+
+## Living World — codex, map & growth (product layer)
+The canon is browsed as a **living video-game world that grows as people contribute**. It is
+**one graph, exposed as several projections + two write paths** — never separate databases.
+
+**Codex views (the same canon, filtered by `type`):**
+- **Map** (home) — `type=location`, laid out by `map_meta`. Discovered places render clear;
+  revealed-but-unvisited places render as fog silhouettes; the frontier reads
+  "submit lore to chart this region." Click a place → its detail (lore, who/what is here,
+  storylines set here) + **"Add lore here"** (pre-fills `references=[place]`).
+- **Characters** — `type=character`. **Bestiary** — `type=beast`. **Grimoire** — `type=spell`.
+  Each is an index grid → entity detail → "Add" creates a new node of that type.
+- **Storylines** — the graph followed along `derived_from`, played by the ScenePlayer.
+- **Showcase** — generated comics/reels (unchanged).
+
+**Agent-placed geography (Cartographer node).** A new LLM node in the ingest pipeline: for a
+`location` contribution it reads existing places' `map_meta` and **proposes** a `region`,
+`{x,y}` position, and `near` links; for `character|beast|spell` it proposes a primary
+"located-in" place reference. The deterministic controller validates and writes `map_meta`
+(clamping `{x,y}` to map bounds). Non-spatial types pass through. The world self-assembles from
+the lore text — users never place pins. Follows the **proposal → controller** invariant.
+
+**Growth / unlock = a reveal layer, not new tables of truth.** Global reveal is just
+`status=accepted`; the personal fog overlay is the `Discovery` table. No per-user forks of canon.
+
+**Two write paths (both create a `CanonEntry`; they differ only in lineage):**
+1. **New entity** — pick a type, write lore. For a *storyline*, select existing cast/setting from
+   the canon **or** create new entities inline (each inline new thing runs the full pipeline and
+   the storyline `references` it).
+2. **Continue / Fork** — from a storyline node, two explicit actions:
+   - **Continue** → extend the canonical beat (`derived_from=[node]`, inherits cast/setting).
+   - **Fork** → open a divergent alternate branch (`derived_from=[node]`, a sibling timeline).
+   All branches coexist; **votes can crown a "prime timeline"** per tree. Both are ordinary
+   `derived_from` edges — the distinction is UX intent, surfaced in the player's `choices[]`.
+
+**The fold (fragment-context, not the whole canon).** When a human forks/continues, the compose UI
+shows them only their **seam** — the parent beat, its inherited cast/setting, and the world's
+`opening_line` — **never the whole map or full canon.** Creation happens from a fragment, exactly
+like the exquisite-corpse fold; the surprise lives in the seams. The **Continuity agent is the
+invisible referee**: it still reads the *full* canon to enforce global coherence and catch
+contradictions/safety issues, but that global view is the AI's, not the contributor's. Humans get
+surreal emergence; agents silently hold the constraints. (This is a UI/prompt-scoping rule, not a
+data-model change — the store is unchanged; the compose endpoint just hands the client the seam.)
+
+**REST surface (additive):**
+- `GET /world/map` → discovered locations + coords + regions + per-user fog/lock state.
+- `GET /codex/{characters|beasts|spells}` → the index grids.
+- `GET /canon/{id}` → generic entity detail (lore, related entities, storylines it appears in).
+- `POST /discover` → clears fog on a node for the caller (idempotent).
+- `POST /contribute` (extended) → `type` now includes `beast|spell`; accepts `derived_from`
+  and `references`. Lineage is applied by the controller, not inferred by the Provenance LLM.
 
 ## Content & safety policy (Moderation/Safety agent)
 Runs **before** anything is written to canon, and **re-checks the Narrator's final

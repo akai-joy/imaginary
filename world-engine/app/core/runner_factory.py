@@ -18,9 +18,8 @@ from google.adk.sessions import BaseSessionService
 
 
 def create_runner(app: App, session_service: BaseSessionService) -> Runner:
-    """Creates a Runner using the App configuration, passing App plugins list explicitly."""
+    """Creates a Runner using the App configuration."""
     return Runner(
         app=app,
         session_service=session_service,
-        plugins=app.plugins,
     )

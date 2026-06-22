@@ -1,0 +1,154 @@
+active_profile: default
+media_providers:
+  image:
+    model: gpt-image-1
+    provider: openai
+    quality: medium
+    secret: OPENAI_API_KEY
+    size_landscape: 1536x1024
+    size_portrait: 1024x1536
+  panel_tiering:
+    default_kind: image
+    max_video_panels_per_scene: 2
+    video_when: key
+  video:
+    aspect_ratio: '9:16'
+    model_tier: lite
+    provider: veo
+    silent: true
+  voice:
+    model: eleven_multilingual_v2
+    provider: elevenlabs
+    secret: ELEVENLABS_API_KEY
+    settings:
+      similarity_boost: 0.75
+      stability: 0.5
+      style: 0.0
+  voice_registry:
+    _narrator: REPLACE_WITH_VOICE_ID
+models:
+  continuity: gemini-2.5-flash
+  moderation: gemini-2.5-flash
+  narrator: gemini-2.5-flash
+  router: gemini-2.5-flash
+  scoring: gemini-2.5-flash
+  security_screen: gemini-2.5-flash
+  storyboard: gemini-2.5-flash
+moderation:
+  hard_block:
+  - minor_sexualization
+  - illegal_synthesis_instructions
+  - threats_doxxing_real_people
+  hidden_content_scan:
+    detect:
+    - acrostic
+    - base64
+    - hex
+    - zero_width
+    - unusual_unicode
+    - steganography
+    enabled: true
+    on_detect: block_and_strip
+  profiles:
+    default:
+      block:
+      - explicit_sexual
+      - gore_extreme_violence
+      - hate_harassment
+      flag:
+      - mature_nonexplicit
+      - drug_reference_noninstructional
+      - narrative_violence
+    permissive:
+      block:
+      - explicit_sexual
+      - gore_extreme_violence
+      - hate_harassment
+      flag:
+      - mature_nonexplicit
+    strict:
+      block:
+      - explicit_sexual
+      - gore_extreme_violence
+      - hate_harassment
+      - drug_reference
+      - mild_violence
+      flag: []
+  prompt_injection_scan:
+    enabled: true
+    on_detect: block_and_strip
+rate_limits:
+  contributions_per_user_per_hour: 20
+  max_contribution_chars: 4000
+  votes_per_user_per_tree: 1
+scoring:
+  points_multiplier: 1
+  range:
+  - 0
+  - 100
+  weights:
+    build_on: 0.3
+    consistency: 0.3
+    creativity: 0.4
+security:
+  dangerous_actions_require_confirmation:
+  - deploy
+  - canon_delete
+  - publish_live
+  output_filters:
+    block_html_js: true
+    block_img_tags: true
+    url_allowlist:
+    - storage.googleapis.com
+  pii_redaction: true
+  spotlight_untrusted: true
+  tools:
+    continuity:
+    - canon_read
+    controller:
+    - canon_write
+    - ledger_write
+    - gcs_write_job_prefix
+    - publish_mock
+    intake:
+    - canon_read
+    media:
+    - imagen
+    - veo
+    - gcs_write_job_prefix
+    moderation: []
+    narrator:
+    - canon_read
+    provenance:
+    - canon_read
+    scoring:
+    - canon_read
+    storyboard:
+    - canon_read
+showcase:
+  media:
+    cache_assets: true
+    comic:
+      panels:
+        max: 8
+        min: 6
+      provider: openai
+    default: comic
+    reel:
+      aspect_ratio: '9:16'
+      audio: false
+      max_clip_seconds: 8
+      model_tier: lite
+      provider: veo
+      scenes: 3
+    reel_for_top_n: 1
+  publish:
+    gcs_bucket: world-engine-showcase
+    gcs_prefix_per_job: true
+    mode: mock
+  trigger:
+    min_composite_score: 70
+    min_votes: 10
+    rank_weight:
+      score: 0.4
+      votes: 0.6

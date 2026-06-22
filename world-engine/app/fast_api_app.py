@@ -520,19 +520,19 @@ def get_scene(scene_id: str):
                 },
                 {
                     "id": "alistair_p4",
-                    "prompt": "The crows fly to Elynar and deliver the message.",
-                    "caption": "They fly to Elynar and deliver the message.",
+                    "prompt": "Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
+                    "caption": "But Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
                     "imageUrl": None,
-                    "videoUrl": "http://localhost:8000/cache/the_crows_deliver_the_message.mp4",
+                    "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
                     "audioUrl": None,
                     "durationMs": 5200
                 },
                 {
                     "id": "alistair_p5",
-                    "prompt": "Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
-                    "caption": "But Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
+                    "prompt": "The crows fly to Elynar and deliver the message.",
+                    "caption": "They fly to Elynar and deliver the message.",
                     "imageUrl": None,
-                    "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
+                    "videoUrl": "http://localhost:8000/cache/the_crows_deliver_the_message.mp4",
                     "audioUrl": None,
                     "durationMs": 5200
                 }
@@ -571,19 +571,19 @@ def get_scene(scene_id: str):
             panels = [
                 {
                     "id": "protege_p1",
-                    "prompt": "The crows fly to Elynar and deliver the message.",
-                    "caption": "The crows fly to Elynar and deliver the message.",
+                    "prompt": "Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
+                    "caption": "But Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
                     "imageUrl": None,
-                    "videoUrl": "http://localhost:8000/cache/the_crows_deliver_the_message.mp4",
+                    "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
                     "audioUrl": None,
                     "durationMs": 5200
                 },
                 {
                     "id": "protege_p2",
-                    "prompt": "Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
-                    "caption": "But Elynar decides to leave immediately, using her power to teleport through doors to run towards the stables.",
+                    "prompt": "The crows fly to Elynar and deliver the message.",
+                    "caption": "The crows fly to Elynar and deliver the message.",
                     "imageUrl": None,
-                    "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
+                    "videoUrl": "http://localhost:8000/cache/the_crows_deliver_the_message.mp4",
                     "audioUrl": None,
                     "durationMs": 5200
                 }

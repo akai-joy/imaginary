@@ -23,6 +23,38 @@ function normalizeScene(raw) {
   };
 }
 
+// --- Helper to format aspect ratio and resolution ---
+function getMediaSizeLabel(width, height) {
+  if (!width || !height) return "";
+  const ratio = width / height;
+  const tolerance = 0.05;
+  let ratioStr = "";
+  if (Math.abs(ratio - 9/16) < tolerance) {
+    ratioStr = "9:16";
+  } else if (Math.abs(ratio - 16/9) < tolerance) {
+    ratioStr = "16:9";
+  } else if (Math.abs(ratio - 4/3) < tolerance) {
+    ratioStr = "4:3";
+  } else if (Math.abs(ratio - 3/4) < tolerance) {
+    ratioStr = "3:4";
+  } else if (Math.abs(ratio - 1/1) < tolerance) {
+    ratioStr = "1:1";
+  } else if (Math.abs(ratio - 16/10) < tolerance) {
+    ratioStr = "16:10";
+  } else {
+    const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+    const divisor = gcd(Math.round(width), Math.round(height));
+    const w = Math.round(width / divisor);
+    const h = Math.round(height / divisor);
+    if (w < 50 && h < 50 && w > 0 && h > 0) {
+      ratioStr = `${w}:${h}`;
+    } else {
+      ratioStr = ratio.toFixed(2) + ":1";
+    }
+  }
+  return `${ratioStr} (${Math.round(width)}x${Math.round(height)})`;
+}
+
 // --- Icons ---------------------------------------------------------------------
 const I = {
   play: <path d="M8 5v14l11-7z" />,
@@ -52,7 +84,7 @@ const Icon = ({ d, stroke }) => (
 );
 
 // --- Visual for a panel: real video, real image, or a styled placeholder -------
-function PanelVisual({ panel, index, playing, videoRef }) {
+function PanelVisual({ panel, index, playing, videoRef, onLayout }) {
   const kb = `kb-${index % 2 === 0 ? "a" : "b"} ${playing ? "kb-on" : ""}`;
   if (panel.videoUrl) {
     return (
@@ -63,11 +95,27 @@ function PanelVisual({ panel, index, playing, videoRef }) {
         muted={Boolean(panel.audioUrl)}
         playsInline
         preload="auto"
+        onLoadedMetadata={(e) => {
+          if (e.target.videoWidth && e.target.videoHeight) {
+            onLayout(e.target.videoWidth, e.target.videoHeight);
+          }
+        }}
       />
     );
   }
   if (panel.imageUrl) {
-    return <img className={`stage-media ${kb}`} src={panel.imageUrl} alt={panel.caption} />;
+    return (
+      <img
+        className={`stage-media ${kb}`}
+        src={panel.imageUrl}
+        alt={panel.caption}
+        onLoad={(e) => {
+          if (e.target.naturalWidth && e.target.naturalHeight) {
+            onLayout(e.target.naturalWidth, e.target.naturalHeight);
+          }
+        }}
+      />
+    );
   }
   // placeholders so the demo renders without assets
   const isVideo = panel.kind === "video";
@@ -90,6 +138,12 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
   const [atChoices, setAtChoices] = useState(false);
   const [progress, setProgress] = useState(0);
   const [showCaptions, setShowCaptions] = useState(true);
+  const [mediaDimensions, setMediaDimensions] = useState({
+    width: 0,
+    height: 0,
+    ratio: 16 / 10,
+    isEstimated: true
+  });
   const audioRef = useRef(null);
   const videoRef = useRef(null);
 
@@ -103,6 +157,26 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
     setAtChoices(false);
     setProgress(0);
   }, [scene.id]);
+
+  useEffect(() => {
+    // Default fallback ratios: vertical 9:16 for videos, landscape 16:10 for images/placeholders
+    const isVideo = panel.videoUrl || panel.kind === "video";
+    setMediaDimensions({
+      width: isVideo ? 720 : 1600,
+      height: isVideo ? 1280 : 1000,
+      ratio: isVideo ? 9 / 16 : 16 / 10,
+      isEstimated: true
+    });
+  }, [panel.id, panel.videoUrl, panel.kind]);
+
+  const handleMediaLayout = useCallback((width, height) => {
+    setMediaDimensions({
+      width,
+      height,
+      ratio: width / height,
+      isEstimated: false
+    });
+  }, []);
 
   const goNext = useCallback(() => {
     setProgress(0);
@@ -206,9 +280,9 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
         <p className="scene-logline">{scene.logline}</p>
       </div>
 
-      <div className="stage">
+      <div className="stage" style={{ aspectRatio: mediaDimensions.ratio }}>
         <div className="stage-active" key={panel.id}>
-          <PanelVisual panel={panel} index={index} playing={playing && !atChoices} videoRef={videoRef} />
+          <PanelVisual panel={panel} index={index} playing={playing && !atChoices} videoRef={videoRef} onLayout={handleMediaLayout} />
         </div>
 
         {panel.audioUrl && <audio key={panel.id} ref={audioRef} src={panel.audioUrl} preload="auto" />}
@@ -274,6 +348,14 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
           <Icon d={I.next} stroke />
         </button>
         <span className="counter">{Math.min(index + 1, panels.length)} / {panels.length}</span>
+        {mediaDimensions && mediaDimensions.width > 0 && mediaDimensions.height > 0 && (
+          <span
+            className={`media-size-badge ${mediaDimensions.isEstimated ? "is-estimated" : ""}`}
+            title={mediaDimensions.isEstimated ? "Estimated size" : "Real size read from media"}
+          >
+            {getMediaSizeLabel(mediaDimensions.width, mediaDimensions.height)}
+          </span>
+        )}
         <button
           className={`cc ${showCaptions ? "on" : ""}`}
           onClick={() => setShowCaptions((s) => !s)}

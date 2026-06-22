@@ -21,6 +21,8 @@ from pydantic import BaseModel, Field
 class ContributionType(StrEnum):
     CHARACTER = "character"
     LOCATION = "location"
+    BEAST = "beast"
+    SPELL = "spell"
     FACTION = "faction"
     PLOT = "plot"
     LORE = "lore"
@@ -43,7 +45,20 @@ class Contribution(BaseModel):
     body: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     status: ContributionStatus = ContributionStatus.PENDING
+    # `references` = cast/setting the contributor selected; `derived_from` = explicit
+    # fork/continue lineage chosen in the UI. Both are trusted structure applied by the
+    # controller (content is still moderated). Empty `derived_from` => a brand-new root.
     references: list[str] = Field(default_factory=list)
+    derived_from: list[str] = Field(default_factory=list)
+
+
+class MapMeta(BaseModel):
+    """World-map placement for a location, written only by the Cartographer via the controller."""
+
+    x: float = 0.0
+    y: float = 0.0
+    region: str = ""
+    near: list[str] = Field(default_factory=list)
 
 
 class CanonEntry(BaseModel):
@@ -53,7 +68,18 @@ class CanonEntry(BaseModel):
     body: str
     contributor_id: str
     derived_from: list[str] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)
     version: int = 1
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    # Set only for locations, by the Cartographer node (never by a user).
+    map_meta: MapMeta | None = None
+
+
+class Discovery(BaseModel):
+    """Per-user exploration state for the fog-of-war overlay. One shared canon, personal fog."""
+
+    user_id: str
+    canon_id: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

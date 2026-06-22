@@ -16,12 +16,13 @@ import json
 import re
 import sqlite3
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.types import (
     CanonEntry,
     Contribution,
     LedgerEntry,
+    MapMeta,
     MediaAsset,
     ShowcaseJob,
     Vote,
@@ -67,8 +68,23 @@ class CanonStore(ABC):
         pass
 
     @abstractmethod
+    def list_canon_entries_by_type(self, entry_type: str) -> list[CanonEntry]:
+        """List canon entries filtered by type (powers the Map / codex views)."""
+        pass
+
+    @abstractmethod
     def search_canon_entries(self, query: str) -> list[CanonEntry]:
         """Search canon entries using text match keywords."""
+        pass
+
+    @abstractmethod
+    def save_discovery(self, user_id: str, canon_id: str) -> None:
+        """Record that a user has discovered a node (clears its fog). Idempotent."""
+        pass
+
+    @abstractmethod
+    def list_discoveries(self, user_id: str) -> set[str]:
+        """Return the set of canon_ids this user has discovered."""
         pass
 
     @abstractmethod
@@ -145,7 +161,25 @@ class SQLiteCanonStore(CanonStore):
                     contributor_id TEXT NOT NULL,
                     derived_from_json TEXT NOT NULL,
                     version INTEGER NOT NULL,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    references_json TEXT,
+                    map_meta_json TEXT
+                )
+            """)
+            # Self-healing migration: add Living-World columns to pre-existing canon tables.
+            cursor.execute("PRAGMA table_info(canon_entries)")
+            canon_columns = [col[1] for col in cursor.fetchall()]
+            if "references_json" not in canon_columns:
+                cursor.execute("ALTER TABLE canon_entries ADD COLUMN references_json TEXT")
+            if "map_meta_json" not in canon_columns:
+                cursor.execute("ALTER TABLE canon_entries ADD COLUMN map_meta_json TEXT")
+            # Per-user discovery (fog-of-war) table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS discoveries (
+                    user_id TEXT NOT NULL,
+                    canon_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, canon_id)
                 )
             """)
             # Ledger entries table
@@ -249,14 +283,36 @@ class SQLiteCanonStore(CanonStore):
                 references=json.loads(row[7]),
             )
 
+    # Column order shared by every canon SELECT, paired with _row_to_canon below.
+    _CANON_COLS = (
+        "id, type, title, body, contributor_id, derived_from_json, version, "
+        "created_at, references_json, map_meta_json"
+    )
+
+    @staticmethod
+    def _row_to_canon(row) -> CanonEntry:
+        return CanonEntry(
+            id=row[0],
+            type=row[1],
+            title=row[2],
+            body=row[3],
+            contributor_id=row[4],
+            derived_from=json.loads(row[5]),
+            version=row[6],
+            created_at=datetime.fromisoformat(row[7]),
+            references=json.loads(row[8]) if row[8] else [],
+            map_meta=MapMeta(**json.loads(row[9])) if row[9] else None,
+        )
+
     def save_canon_entry(self, entry: CanonEntry) -> None:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO canon_entries (
-                    id, type, title, body, contributor_id, derived_from_json, version, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    id, type, title, body, contributor_id, derived_from_json, version,
+                    created_at, references_json, map_meta_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     entry.id,
@@ -267,6 +323,8 @@ class SQLiteCanonStore(CanonStore):
                     json.dumps(entry.derived_from),
                     entry.version,
                     entry.created_at.isoformat(),
+                    json.dumps(entry.references),
+                    json.dumps(entry.map_meta.model_dump()) if entry.map_meta else None,
                 ),
             )
             conn.commit()
@@ -275,25 +333,13 @@ class SQLiteCanonStore(CanonStore):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                """
-                SELECT id, type, title, body, contributor_id, derived_from_json, version, created_at
-                FROM canon_entries WHERE id = ?
-            """,
+                f"SELECT {self._CANON_COLS} FROM canon_entries WHERE id = ?",
                 (entry_id,),
             )
             row = cursor.fetchone()
             if not row:
                 return None
-            return CanonEntry(
-                id=row[0],
-                type=row[1],
-                title=row[2],
-                body=row[3],
-                contributor_id=row[4],
-                derived_from=json.loads(row[5]),
-                version=row[6],
-                created_at=datetime.fromisoformat(row[7]),
-            )
+            return self._row_to_canon(row)
 
     def save_ledger_entry(self, entry: LedgerEntry) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -339,26 +385,17 @@ class SQLiteCanonStore(CanonStore):
     def list_canon_entries(self) -> list[CanonEntry]:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            cursor.execute(f"SELECT {self._CANON_COLS} FROM canon_entries")
+            return [self._row_to_canon(row) for row in cursor.fetchall()]
+
+    def list_canon_entries_by_type(self, entry_type: str) -> list[CanonEntry]:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
             cursor.execute(
-                """
-                SELECT id, type, title, body, contributor_id, derived_from_json, version, created_at
-                FROM canon_entries
-            """
+                f"SELECT {self._CANON_COLS} FROM canon_entries WHERE type = ?",
+                (entry_type,),
             )
-            rows = cursor.fetchall()
-            return [
-                CanonEntry(
-                    id=row[0],
-                    type=row[1],
-                    title=row[2],
-                    body=row[3],
-                    contributor_id=row[4],
-                    derived_from=json.loads(row[5]),
-                    version=row[6],
-                    created_at=datetime.fromisoformat(row[7]),
-                )
-                for row in rows
-            ]
+            return [self._row_to_canon(row) for row in cursor.fetchall()]
 
     def search_canon_entries(self, query: str) -> list[CanonEntry]:
         # Simple keyword search using SQL LIKE
@@ -368,10 +405,7 @@ class SQLiteCanonStore(CanonStore):
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            sql = (
-                "SELECT id, type, title, body, contributor_id, derived_from_json, version, created_at "
-                "FROM canon_entries WHERE "
-            )
+            sql = f"SELECT {self._CANON_COLS} FROM canon_entries WHERE "
             conditions = []
             params = []
             for word in words:
@@ -380,20 +414,26 @@ class SQLiteCanonStore(CanonStore):
             sql += " OR ".join(conditions)
 
             cursor.execute(sql, params)
-            rows = cursor.fetchall()
-            return [
-                CanonEntry(
-                    id=row[0],
-                    type=row[1],
-                    title=row[2],
-                    body=row[3],
-                    contributor_id=row[4],
-                    derived_from=json.loads(row[5]),
-                    version=row[6],
-                    created_at=datetime.fromisoformat(row[7]),
-                )
-                for row in rows
-            ]
+            return [self._row_to_canon(row) for row in cursor.fetchall()]
+
+    def save_discovery(self, user_id: str, canon_id: str) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO discoveries (user_id, canon_id, created_at)
+                VALUES (?, ?, ?)
+            """,
+                (user_id, canon_id, datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+
+    def list_discoveries(self, user_id: str) -> set[str]:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT canon_id FROM discoveries WHERE user_id = ?", (user_id,)
+            )
+            return {row[0] for row in cursor.fetchall()}
 
     def save_vote(self, vote: Vote) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -598,6 +638,22 @@ class FirestoreCanonStore(CanonStore):
             references=d["references"],
         )
 
+    @staticmethod
+    def _doc_to_canon(d: dict) -> CanonEntry:
+        map_meta = d.get("map_meta")
+        return CanonEntry(
+            id=d["id"],
+            type=d["type"],
+            title=d["title"],
+            body=d["body"],
+            contributor_id=d["contributor_id"],
+            derived_from=d["derived_from"],
+            references=d.get("references", []),
+            version=d["version"],
+            created_at=datetime.fromisoformat(d["created_at"]),
+            map_meta=MapMeta(**map_meta) if map_meta else None,
+        )
+
     def save_canon_entry(self, entry: CanonEntry) -> None:
         data = {
             "id": entry.id,
@@ -606,8 +662,10 @@ class FirestoreCanonStore(CanonStore):
             "body": entry.body,
             "contributor_id": entry.contributor_id,
             "derived_from": entry.derived_from,
+            "references": entry.references,
             "version": entry.version,
             "created_at": entry.created_at.isoformat(),
+            "map_meta": entry.map_meta.model_dump() if entry.map_meta else None,
         }
         self.client.collection("canon_entries").document(entry.id).set(data)
 
@@ -615,17 +673,7 @@ class FirestoreCanonStore(CanonStore):
         doc = self.client.collection("canon_entries").document(entry_id).get()
         if not doc.exists:
             return None
-        d = doc.to_dict()
-        return CanonEntry(
-            id=d["id"],
-            type=d["type"],
-            title=d["title"],
-            body=d["body"],
-            contributor_id=d["contributor_id"],
-            derived_from=d["derived_from"],
-            version=d["version"],
-            created_at=datetime.fromisoformat(d["created_at"]),
-        )
+        return self._doc_to_canon(doc.to_dict())
 
     def save_ledger_entry(self, entry: LedgerEntry) -> None:
         data = {
@@ -659,22 +707,31 @@ class FirestoreCanonStore(CanonStore):
 
     def list_canon_entries(self) -> list[CanonEntry]:
         docs = self.client.collection("canon_entries").stream()
-        results = []
-        for doc in docs:
-            d = doc.to_dict()
-            results.append(
-                CanonEntry(
-                    id=d["id"],
-                    type=d["type"],
-                    title=d["title"],
-                    body=d["body"],
-                    contributor_id=d["contributor_id"],
-                    derived_from=d["derived_from"],
-                    version=d["version"],
-                    created_at=datetime.fromisoformat(d["created_at"]),
-                )
-            )
-        return results
+        return [self._doc_to_canon(doc.to_dict()) for doc in docs]
+
+    def list_canon_entries_by_type(self, entry_type: str) -> list[CanonEntry]:
+        docs = (
+            self.client.collection("canon_entries")
+            .where("type", "==", entry_type)
+            .stream()
+        )
+        return [self._doc_to_canon(doc.to_dict()) for doc in docs]
+
+    def save_discovery(self, user_id: str, canon_id: str) -> None:
+        data = {
+            "user_id": user_id,
+            "canon_id": canon_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self.client.collection("discoveries").document(f"{user_id}__{canon_id}").set(data)
+
+    def list_discoveries(self, user_id: str) -> set[str]:
+        docs = (
+            self.client.collection("discoveries")
+            .where("user_id", "==", user_id)
+            .stream()
+        )
+        return {doc.to_dict()["canon_id"] for doc in docs}
 
     def search_canon_entries(self, query: str) -> list[CanonEntry]:
         words = [w.lower() for w in re.split(r"\W+", query) if len(w) > 3]
