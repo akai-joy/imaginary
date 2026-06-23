@@ -79,6 +79,10 @@ def ingest_controller_node(ctx: Context, node_input: Contribution):
                 created_at=datetime.fromisoformat(new_entry_data["created_at"]),
             )
 
+            # Scope the canon entry to the contribution's world (trusted structure,
+            # stamped deterministically — never inferred by an LLM node).
+            new_entry.world_id = contrib.world_id
+
             # Honour the lineage/refs the contributor chose in the UI: trusted structure,
             # applied deterministically here rather than inferred by the Provenance LLM.
             if contrib.derived_from:

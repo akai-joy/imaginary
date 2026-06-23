@@ -19,6 +19,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 
 from app.core.types import (
+    DEFAULT_WORLD_ID,
+    SEED_WORLD,
     CanonEntry,
     Contribution,
     LedgerEntry,
@@ -26,11 +28,33 @@ from app.core.types import (
     MediaAsset,
     ShowcaseJob,
     Vote,
+    World,
+    WorldStatus,
 )
 
 
 class CanonStore(ABC):
     """Interface for world-engine persistence layer."""
+
+    @abstractmethod
+    def save_world(self, world: World) -> None:
+        """Save or update a world (themed seasonal drop)."""
+        pass
+
+    @abstractmethod
+    def get_world(self, world_id: str) -> World | None:
+        """Retrieve a world by ID."""
+        pass
+
+    @abstractmethod
+    def list_worlds(self) -> list[World]:
+        """List all worlds (active and archived), newest first."""
+        pass
+
+    @abstractmethod
+    def get_active_world(self) -> World | None:
+        """Return the current active world (most recently opened), or None."""
+        pass
 
     @abstractmethod
     def save_contribution(self, contribution: Contribution) -> None:
@@ -63,17 +87,21 @@ class CanonStore(ABC):
         pass
 
     @abstractmethod
-    def list_canon_entries(self) -> list[CanonEntry]:
-        """List all canon entries in the store."""
+    def list_canon_entries(self, world_id: str | None = None) -> list[CanonEntry]:
+        """List all canon entries, optionally scoped to one world."""
         pass
 
     @abstractmethod
-    def list_canon_entries_by_type(self, entry_type: str) -> list[CanonEntry]:
+    def list_canon_entries_by_type(
+        self, entry_type: str, world_id: str | None = None
+    ) -> list[CanonEntry]:
         """List canon entries filtered by type (powers the Map / codex views)."""
         pass
 
     @abstractmethod
-    def search_canon_entries(self, query: str) -> list[CanonEntry]:
+    def search_canon_entries(
+        self, query: str, world_id: str | None = None
+    ) -> list[CanonEntry]:
         """Search canon entries using text match keywords."""
         pass
 
@@ -108,8 +136,8 @@ class CanonStore(ABC):
         pass
 
     @abstractmethod
-    def list_showcase_jobs(self) -> list[ShowcaseJob]:
-        """List all showcase jobs."""
+    def list_showcase_jobs(self, world_id: str | None = None) -> list[ShowcaseJob]:
+        """List all showcase jobs, optionally scoped to one world."""
         pass
 
     @abstractmethod
@@ -138,11 +166,26 @@ class SQLiteCanonStore(CanonStore):
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            # Worlds table (themed seasonal drops). Every other entity is scoped to a world.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS worlds (
+                    id TEXT PRIMARY KEY,
+                    theme TEXT NOT NULL,
+                    opening_line TEXT NOT NULL,
+                    art_style_directive TEXT NOT NULL,
+                    moderation_profile TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    opens_at TEXT NOT NULL,
+                    closes_at TEXT,
+                    created_at TEXT NOT NULL
+                )
+            """)
             # Contributions table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS contributions (
                     id TEXT PRIMARY KEY,
                     author_id TEXT NOT NULL,
+                    world_id TEXT NOT NULL DEFAULT 'world_genesis',
                     type TEXT NOT NULL,
                     title TEXT NOT NULL,
                     body TEXT NOT NULL,
@@ -155,6 +198,7 @@ class SQLiteCanonStore(CanonStore):
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS canon_entries (
                     id TEXT PRIMARY KEY,
+                    world_id TEXT NOT NULL DEFAULT 'world_genesis',
                     type TEXT NOT NULL,
                     title TEXT NOT NULL,
                     body TEXT NOT NULL,
@@ -166,13 +210,28 @@ class SQLiteCanonStore(CanonStore):
                     map_meta_json TEXT
                 )
             """)
-            # Self-healing migration: add Living-World columns to pre-existing canon tables.
-            cursor.execute("PRAGMA table_info(canon_entries)")
-            canon_columns = [col[1] for col in cursor.fetchall()]
-            if "references_json" not in canon_columns:
-                cursor.execute("ALTER TABLE canon_entries ADD COLUMN references_json TEXT")
-            if "map_meta_json" not in canon_columns:
-                cursor.execute("ALTER TABLE canon_entries ADD COLUMN map_meta_json TEXT")
+            # Self-healing migration: add Living-World columns to pre-existing tables.
+            # (ALTER ... ADD COLUMN appends to the end; SELECTs use named columns so order
+            # never matters.)
+            def _add_missing_columns(table: str, columns: dict[str, str]):
+                cursor.execute(f"PRAGMA table_info({table})")
+                existing = {col[1] for col in cursor.fetchall()}
+                for name, ddl in columns.items():
+                    if name not in existing:
+                        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
+            _add_missing_columns(
+                "canon_entries",
+                {
+                    "references_json": "references_json TEXT",
+                    "map_meta_json": "map_meta_json TEXT",
+                    "world_id": "world_id TEXT NOT NULL DEFAULT 'world_genesis'",
+                },
+            )
+            _add_missing_columns(
+                "contributions",
+                {"world_id": "world_id TEXT NOT NULL DEFAULT 'world_genesis'"},
+            )
             # Per-user discovery (fog-of-war) table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS discoveries (
@@ -197,15 +256,21 @@ class SQLiteCanonStore(CanonStore):
                 CREATE TABLE IF NOT EXISTS votes (
                     id TEXT PRIMARY KEY,
                     voter_id TEXT NOT NULL,
+                    world_id TEXT NOT NULL DEFAULT 'world_genesis',
                     tree_id TEXT NOT NULL,
                     weight REAL NOT NULL,
                     created_at TEXT NOT NULL
                 )
             """)
+            _add_missing_columns(
+                "votes",
+                {"world_id": "world_id TEXT NOT NULL DEFAULT 'world_genesis'"},
+            )
             # Showcase jobs table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS showcase_jobs (
                     id TEXT PRIMARY KEY,
+                    world_id TEXT NOT NULL DEFAULT 'world_genesis',
                     tree_id TEXT NOT NULL,
                     media_type TEXT NOT NULL,
                     status TEXT NOT NULL,
@@ -213,13 +278,13 @@ class SQLiteCanonStore(CanonStore):
                     storyboard_json TEXT
                 )
             """)
-            # Check and add storyboard_json to showcase_jobs if missing (self-healing migration)
-            cursor.execute("PRAGMA table_info(showcase_jobs)")
-            columns = [col[1] for col in cursor.fetchall()]
-            if "storyboard_json" not in columns:
-                cursor.execute(
-                    "ALTER TABLE showcase_jobs ADD COLUMN storyboard_json TEXT"
-                )
+            _add_missing_columns(
+                "showcase_jobs",
+                {
+                    "storyboard_json": "storyboard_json TEXT",
+                    "world_id": "world_id TEXT NOT NULL DEFAULT 'world_genesis'",
+                },
+            )
 
             # Media assets table
             cursor.execute("""
@@ -235,7 +300,104 @@ class SQLiteCanonStore(CanonStore):
                     created_at TEXT NOT NULL
                 )
             """)
+
+            # Seed the first active world if none exists yet, so the playground and tests
+            # always have a world to scope against. We never re-seed once any world exists
+            # (so archiving the seed doesn't resurrect it).
+            cursor.execute("SELECT COUNT(*) FROM worlds")
+            if cursor.fetchone()[0] == 0:
+                w = SEED_WORLD
+                cursor.execute(
+                    """
+                    INSERT INTO worlds (
+                        id, theme, opening_line, art_style_directive, moderation_profile,
+                        status, opens_at, closes_at, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        w.id,
+                        w.theme,
+                        w.opening_line,
+                        w.art_style_directive,
+                        w.moderation_profile,
+                        w.status.value,
+                        w.opens_at.isoformat(),
+                        w.closes_at.isoformat() if w.closes_at else None,
+                        w.created_at.isoformat(),
+                    ),
+                )
+
             conn.commit()
+
+    _WORLD_COLS = (
+        "id, theme, opening_line, art_style_directive, moderation_profile, "
+        "status, opens_at, closes_at, created_at"
+    )
+
+    @staticmethod
+    def _row_to_world(row) -> World:
+        return World(
+            id=row[0],
+            theme=row[1],
+            opening_line=row[2],
+            art_style_directive=row[3],
+            moderation_profile=row[4],
+            status=row[5],
+            opens_at=datetime.fromisoformat(row[6]),
+            closes_at=datetime.fromisoformat(row[7]) if row[7] else None,
+            created_at=datetime.fromisoformat(row[8]),
+        )
+
+    def save_world(self, world: World) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO worlds (
+                    id, theme, opening_line, art_style_directive, moderation_profile,
+                    status, opens_at, closes_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    world.id,
+                    world.theme,
+                    world.opening_line,
+                    world.art_style_directive,
+                    world.moderation_profile,
+                    world.status.value,
+                    world.opens_at.isoformat(),
+                    world.closes_at.isoformat() if world.closes_at else None,
+                    world.created_at.isoformat(),
+                ),
+            )
+            conn.commit()
+
+    def get_world(self, world_id: str) -> World | None:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT {self._WORLD_COLS} FROM worlds WHERE id = ?", (world_id,)
+            )
+            row = cursor.fetchone()
+            return self._row_to_world(row) if row else None
+
+    def list_worlds(self) -> list[World]:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT {self._WORLD_COLS} FROM worlds ORDER BY opens_at DESC"
+            )
+            return [self._row_to_world(row) for row in cursor.fetchall()]
+
+    def get_active_world(self) -> World | None:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT {self._WORLD_COLS} FROM worlds WHERE status = ? "
+                "ORDER BY opens_at DESC LIMIT 1",
+                (WorldStatus.ACTIVE.value,),
+            )
+            row = cursor.fetchone()
+            return self._row_to_world(row) if row else None
 
     def save_contribution(self, contribution: Contribution) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -243,12 +405,13 @@ class SQLiteCanonStore(CanonStore):
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO contributions (
-                    id, author_id, type, title, body, created_at, status, references_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    id, author_id, world_id, type, title, body, created_at, status, references_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     contribution.id,
                     contribution.author_id,
+                    contribution.world_id,
                     contribution.type.value,
                     contribution.title,
                     contribution.body,
@@ -264,7 +427,7 @@ class SQLiteCanonStore(CanonStore):
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, author_id, type, title, body, created_at, status, references_json
+                SELECT id, author_id, world_id, type, title, body, created_at, status, references_json
                 FROM contributions WHERE id = ?
             """,
                 (contribution_id,),
@@ -275,18 +438,19 @@ class SQLiteCanonStore(CanonStore):
             return Contribution(
                 id=row[0],
                 author_id=row[1],
-                type=row[2],
-                title=row[3],
-                body=row[4],
-                created_at=datetime.fromisoformat(row[5]),
-                status=row[6],
-                references=json.loads(row[7]),
+                world_id=row[2],
+                type=row[3],
+                title=row[4],
+                body=row[5],
+                created_at=datetime.fromisoformat(row[6]),
+                status=row[7],
+                references=json.loads(row[8]),
             )
 
     # Column order shared by every canon SELECT, paired with _row_to_canon below.
     _CANON_COLS = (
         "id, type, title, body, contributor_id, derived_from_json, version, "
-        "created_at, references_json, map_meta_json"
+        "created_at, references_json, map_meta_json, world_id"
     )
 
     @staticmethod
@@ -302,6 +466,7 @@ class SQLiteCanonStore(CanonStore):
             created_at=datetime.fromisoformat(row[7]),
             references=json.loads(row[8]) if row[8] else [],
             map_meta=MapMeta(**json.loads(row[9])) if row[9] else None,
+            world_id=row[10] or DEFAULT_WORLD_ID,
         )
 
     def save_canon_entry(self, entry: CanonEntry) -> None:
@@ -311,8 +476,8 @@ class SQLiteCanonStore(CanonStore):
                 """
                 INSERT OR REPLACE INTO canon_entries (
                     id, type, title, body, contributor_id, derived_from_json, version,
-                    created_at, references_json, map_meta_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at, references_json, map_meta_json, world_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     entry.id,
@@ -325,6 +490,7 @@ class SQLiteCanonStore(CanonStore):
                     entry.created_at.isoformat(),
                     json.dumps(entry.references),
                     json.dumps(entry.map_meta.model_dump()) if entry.map_meta else None,
+                    entry.world_id,
                 ),
             )
             conn.commit()
@@ -382,26 +548,43 @@ class SQLiteCanonStore(CanonStore):
                 for row in rows
             ]
 
-    def list_canon_entries(self) -> list[CanonEntry]:
+    def list_canon_entries(self, world_id: str | None = None) -> list[CanonEntry]:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(f"SELECT {self._CANON_COLS} FROM canon_entries")
+            if world_id is None:
+                cursor.execute(f"SELECT {self._CANON_COLS} FROM canon_entries")
+            else:
+                cursor.execute(
+                    f"SELECT {self._CANON_COLS} FROM canon_entries WHERE world_id = ?",
+                    (world_id,),
+                )
             return [self._row_to_canon(row) for row in cursor.fetchall()]
 
-    def list_canon_entries_by_type(self, entry_type: str) -> list[CanonEntry]:
+    def list_canon_entries_by_type(
+        self, entry_type: str, world_id: str | None = None
+    ) -> list[CanonEntry]:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                f"SELECT {self._CANON_COLS} FROM canon_entries WHERE type = ?",
-                (entry_type,),
-            )
+            if world_id is None:
+                cursor.execute(
+                    f"SELECT {self._CANON_COLS} FROM canon_entries WHERE type = ?",
+                    (entry_type,),
+                )
+            else:
+                cursor.execute(
+                    f"SELECT {self._CANON_COLS} FROM canon_entries "
+                    "WHERE type = ? AND world_id = ?",
+                    (entry_type, world_id),
+                )
             return [self._row_to_canon(row) for row in cursor.fetchall()]
 
-    def search_canon_entries(self, query: str) -> list[CanonEntry]:
+    def search_canon_entries(
+        self, query: str, world_id: str | None = None
+    ) -> list[CanonEntry]:
         # Simple keyword search using SQL LIKE
         words = [w for w in re.split(r"\W+", query) if len(w) > 3]
         if not words:
-            return self.list_canon_entries()
+            return self.list_canon_entries(world_id)
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -411,7 +594,10 @@ class SQLiteCanonStore(CanonStore):
             for word in words:
                 conditions.append("(title LIKE ? OR body LIKE ?)")
                 params.extend([f"%{word}%", f"%{word}%"])
-            sql += " OR ".join(conditions)
+            sql += "(" + " OR ".join(conditions) + ")"
+            if world_id is not None:
+                sql += " AND world_id = ?"
+                params.append(world_id)
 
             cursor.execute(sql, params)
             return [self._row_to_canon(row) for row in cursor.fetchall()]
@@ -441,12 +627,13 @@ class SQLiteCanonStore(CanonStore):
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO votes (
-                    id, voter_id, tree_id, weight, created_at
-                ) VALUES (?, ?, ?, ?, ?)
+                    id, voter_id, world_id, tree_id, weight, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
             """,
                 (
                     vote.id,
                     vote.voter_id,
+                    vote.world_id,
                     vote.tree_id,
                     vote.weight,
                     vote.created_at.isoformat(),
@@ -459,7 +646,7 @@ class SQLiteCanonStore(CanonStore):
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, voter_id, tree_id, weight, created_at
+                SELECT id, voter_id, world_id, tree_id, weight, created_at
                 FROM votes WHERE tree_id = ?
             """,
                 (tree_id,),
@@ -469,9 +656,10 @@ class SQLiteCanonStore(CanonStore):
                 Vote(
                     id=row[0],
                     voter_id=row[1],
-                    tree_id=row[2],
-                    weight=row[3],
-                    created_at=datetime.fromisoformat(row[4]),
+                    world_id=row[2],
+                    tree_id=row[3],
+                    weight=row[4],
+                    created_at=datetime.fromisoformat(row[5]),
                 )
                 for row in rows
             ]
@@ -482,11 +670,12 @@ class SQLiteCanonStore(CanonStore):
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO showcase_jobs (
-                    id, tree_id, media_type, status, created_at, storyboard_json
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    id, world_id, tree_id, media_type, status, created_at, storyboard_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     job.id,
+                    job.world_id,
                     job.tree_id,
                     job.media_type,
                     job.status.value,
@@ -501,7 +690,7 @@ class SQLiteCanonStore(CanonStore):
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, tree_id, media_type, status, created_at, storyboard_json
+                SELECT id, world_id, tree_id, media_type, status, created_at, storyboard_json
                 FROM showcase_jobs WHERE id = ?
             """,
                 (job_id,),
@@ -511,31 +700,35 @@ class SQLiteCanonStore(CanonStore):
                 return None
             return ShowcaseJob(
                 id=row[0],
-                tree_id=row[1],
-                media_type=row[2],
-                status=row[3],
-                created_at=datetime.fromisoformat(row[4]),
-                storyboard_json=row[5],
+                world_id=row[1],
+                tree_id=row[2],
+                media_type=row[3],
+                status=row[4],
+                created_at=datetime.fromisoformat(row[5]),
+                storyboard_json=row[6],
             )
 
-    def list_showcase_jobs(self) -> list[ShowcaseJob]:
+    def list_showcase_jobs(self, world_id: str | None = None) -> list[ShowcaseJob]:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT id, tree_id, media_type, status, created_at, storyboard_json
-                FROM showcase_jobs
-            """
+            base = (
+                "SELECT id, world_id, tree_id, media_type, status, created_at, "
+                "storyboard_json FROM showcase_jobs"
             )
+            if world_id is None:
+                cursor.execute(base)
+            else:
+                cursor.execute(base + " WHERE world_id = ?", (world_id,))
             rows = cursor.fetchall()
             return [
                 ShowcaseJob(
                     id=row[0],
-                    tree_id=row[1],
-                    media_type=row[2],
-                    status=row[3],
-                    created_at=datetime.fromisoformat(row[4]),
-                    storyboard_json=row[5],
+                    world_id=row[1],
+                    tree_id=row[2],
+                    media_type=row[3],
+                    status=row[4],
+                    created_at=datetime.fromisoformat(row[5]),
+                    storyboard_json=row[6],
                 )
                 for row in rows
             ]
@@ -608,11 +801,60 @@ class FirestoreCanonStore(CanonStore):
         from google.cloud import firestore
 
         self.client = firestore.Client(project=project, database=database)
+        # Seed the first active world if the collection is empty (parity with SQLite).
+        self._ensure_seed_world()
+
+    def _ensure_seed_world(self) -> None:
+        existing = list(self.client.collection("worlds").limit(1).stream())
+        if not existing:
+            self.save_world(SEED_WORLD)
+
+    @staticmethod
+    def _doc_to_world(d: dict) -> World:
+        return World(
+            id=d["id"],
+            theme=d["theme"],
+            opening_line=d["opening_line"],
+            art_style_directive=d.get("art_style_directive", ""),
+            moderation_profile=d.get("moderation_profile", "default"),
+            status=d["status"],
+            opens_at=datetime.fromisoformat(d["opens_at"]),
+            closes_at=datetime.fromisoformat(d["closes_at"]) if d.get("closes_at") else None,
+            created_at=datetime.fromisoformat(d["created_at"]),
+        )
+
+    def save_world(self, world: World) -> None:
+        data = {
+            "id": world.id,
+            "theme": world.theme,
+            "opening_line": world.opening_line,
+            "art_style_directive": world.art_style_directive,
+            "moderation_profile": world.moderation_profile,
+            "status": world.status.value,
+            "opens_at": world.opens_at.isoformat(),
+            "closes_at": world.closes_at.isoformat() if world.closes_at else None,
+            "created_at": world.created_at.isoformat(),
+        }
+        self.client.collection("worlds").document(world.id).set(data)
+
+    def get_world(self, world_id: str) -> World | None:
+        doc = self.client.collection("worlds").document(world_id).get()
+        return self._doc_to_world(doc.to_dict()) if doc.exists else None
+
+    def list_worlds(self) -> list[World]:
+        docs = self.client.collection("worlds").stream()
+        worlds = [self._doc_to_world(doc.to_dict()) for doc in docs]
+        return sorted(worlds, key=lambda w: w.opens_at, reverse=True)
+
+    def get_active_world(self) -> World | None:
+        active = [w for w in self.list_worlds() if w.status == WorldStatus.ACTIVE]
+        return active[0] if active else None
 
     def save_contribution(self, contribution: Contribution) -> None:
         data = {
             "id": contribution.id,
             "author_id": contribution.author_id,
+            "world_id": contribution.world_id,
             "type": contribution.type.value,
             "title": contribution.title,
             "body": contribution.body,
@@ -630,6 +872,7 @@ class FirestoreCanonStore(CanonStore):
         return Contribution(
             id=d["id"],
             author_id=d["author_id"],
+            world_id=d.get("world_id", DEFAULT_WORLD_ID),
             type=d["type"],
             title=d["title"],
             body=d["body"],
@@ -643,6 +886,7 @@ class FirestoreCanonStore(CanonStore):
         map_meta = d.get("map_meta")
         return CanonEntry(
             id=d["id"],
+            world_id=d.get("world_id", DEFAULT_WORLD_ID),
             type=d["type"],
             title=d["title"],
             body=d["body"],
@@ -657,6 +901,7 @@ class FirestoreCanonStore(CanonStore):
     def save_canon_entry(self, entry: CanonEntry) -> None:
         data = {
             "id": entry.id,
+            "world_id": entry.world_id,
             "type": entry.type.value,
             "title": entry.title,
             "body": entry.body,
@@ -705,17 +950,18 @@ class FirestoreCanonStore(CanonStore):
             )
         return results
 
-    def list_canon_entries(self) -> list[CanonEntry]:
-        docs = self.client.collection("canon_entries").stream()
-        return [self._doc_to_canon(doc.to_dict()) for doc in docs]
+    def list_canon_entries(self, world_id: str | None = None) -> list[CanonEntry]:
+        col = self.client.collection("canon_entries")
+        query = col.where("world_id", "==", world_id) if world_id is not None else col
+        return [self._doc_to_canon(doc.to_dict()) for doc in query.stream()]
 
-    def list_canon_entries_by_type(self, entry_type: str) -> list[CanonEntry]:
-        docs = (
-            self.client.collection("canon_entries")
-            .where("type", "==", entry_type)
-            .stream()
-        )
-        return [self._doc_to_canon(doc.to_dict()) for doc in docs]
+    def list_canon_entries_by_type(
+        self, entry_type: str, world_id: str | None = None
+    ) -> list[CanonEntry]:
+        query = self.client.collection("canon_entries").where("type", "==", entry_type)
+        if world_id is not None:
+            query = query.where("world_id", "==", world_id)
+        return [self._doc_to_canon(doc.to_dict()) for doc in query.stream()]
 
     def save_discovery(self, user_id: str, canon_id: str) -> None:
         data = {
@@ -733,9 +979,11 @@ class FirestoreCanonStore(CanonStore):
         )
         return {doc.to_dict()["canon_id"] for doc in docs}
 
-    def search_canon_entries(self, query: str) -> list[CanonEntry]:
+    def search_canon_entries(
+        self, query: str, world_id: str | None = None
+    ) -> list[CanonEntry]:
         words = [w.lower() for w in re.split(r"\W+", query) if len(w) > 3]
-        all_entries = self.list_canon_entries()
+        all_entries = self.list_canon_entries(world_id)
         if not words:
             return all_entries
 
@@ -754,6 +1002,7 @@ class FirestoreCanonStore(CanonStore):
         data = {
             "id": vote.id,
             "voter_id": vote.voter_id,
+            "world_id": vote.world_id,
             "tree_id": vote.tree_id,
             "weight": vote.weight,
             "created_at": vote.created_at.isoformat(),
@@ -769,6 +1018,7 @@ class FirestoreCanonStore(CanonStore):
                 Vote(
                     id=d["id"],
                     voter_id=d["voter_id"],
+                    world_id=d.get("world_id", DEFAULT_WORLD_ID),
                     tree_id=d["tree_id"],
                     weight=d["weight"],
                     created_at=datetime.fromisoformat(d["created_at"]),
@@ -779,6 +1029,7 @@ class FirestoreCanonStore(CanonStore):
     def save_showcase_job(self, job: ShowcaseJob) -> None:
         data = {
             "id": job.id,
+            "world_id": job.world_id,
             "tree_id": job.tree_id,
             "media_type": job.media_type,
             "status": job.status.value,
@@ -794,6 +1045,7 @@ class FirestoreCanonStore(CanonStore):
         d = doc.to_dict()
         return ShowcaseJob(
             id=d["id"],
+            world_id=d.get("world_id", DEFAULT_WORLD_ID),
             tree_id=d["tree_id"],
             media_type=d["media_type"],
             status=d["status"],
@@ -801,14 +1053,16 @@ class FirestoreCanonStore(CanonStore):
             storyboard_json=d.get("storyboard_json"),
         )
 
-    def list_showcase_jobs(self) -> list[ShowcaseJob]:
-        docs = self.client.collection("showcase_jobs").stream()
+    def list_showcase_jobs(self, world_id: str | None = None) -> list[ShowcaseJob]:
+        col = self.client.collection("showcase_jobs")
+        query = col.where("world_id", "==", world_id) if world_id is not None else col
         results = []
-        for doc in docs:
+        for doc in query.stream():
             d = doc.to_dict()
             results.append(
                 ShowcaseJob(
                     id=d["id"],
+                    world_id=d.get("world_id", DEFAULT_WORLD_ID),
                     tree_id=d["tree_id"],
                     media_type=d["media_type"],
                     status=d["status"],

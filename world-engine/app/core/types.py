@@ -17,6 +17,54 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+# Every world-scoped entity (Contribution, CanonEntry, Vote, ShowcaseJob) carries a
+# `world_id`. Until multi-world wiring lands everything defaults to the seed world, so
+# the existing single-world pipeline keeps working unchanged.
+DEFAULT_WORLD_ID = "world_genesis"
+
+
+class WorldStatus(StrEnum):
+    ACTIVE = "active"      # contribution window open
+    ARCHIVED = "archived"  # window closed; read-only collectible
+
+
+class World(BaseModel):
+    """One limited-time themed drop — the unit of participation.
+
+    A world opens on an `opening_line` (a Dark-Tower-grade seed sentence with
+    pursuit-pressure), not a bland theme noun. `art_style_directive` keeps generated
+    media visually coherent; `moderation_profile` selects the `policy.yaml` profile.
+    """
+
+    id: str
+    theme: str
+    opening_line: str
+    art_style_directive: str = ""
+    moderation_profile: str = "default"
+    status: WorldStatus = WorldStatus.ACTIVE
+    opens_at: datetime = Field(default_factory=datetime.utcnow)
+    # None = open-ended (the seed/demo world has no hard deadline). A real drop is
+    # time-boxed — that scarcity is the event energy.
+    closes_at: datetime | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# The single active world the store seeds itself with on first init, so the local
+# playground and tests always have a world to scope against.
+SEED_WORLD = World(
+    id=DEFAULT_WORLD_ID,
+    theme="Medieval Wizards",
+    opening_line=(
+        "The last spell in the world guttered out at dusk, and every wizard who felt "
+        "it die began to run."
+    ),
+    art_style_directive=(
+        "Painterly high-fantasy storybook illustration; candlelit medieval palette; "
+        "ink-and-watercolor linework; cohesive, hand-crafted feel."
+    ),
+    moderation_profile="default",
+)
+
 
 class ContributionType(StrEnum):
     CHARACTER = "character"
@@ -40,6 +88,7 @@ class ContributionStatus(StrEnum):
 class Contribution(BaseModel):
     id: str
     author_id: str
+    world_id: str = DEFAULT_WORLD_ID
     type: ContributionType
     title: str
     body: str
@@ -63,6 +112,7 @@ class MapMeta(BaseModel):
 
 class CanonEntry(BaseModel):
     id: str
+    world_id: str = DEFAULT_WORLD_ID
     type: ContributionType
     title: str
     body: str
@@ -103,6 +153,7 @@ class ShowcaseJobStatus(StrEnum):
 class Vote(BaseModel):
     id: str
     voter_id: str
+    world_id: str = DEFAULT_WORLD_ID
     tree_id: str
     weight: float = 1.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -140,6 +191,7 @@ class Storyboard(BaseModel):
 
 class ShowcaseJob(BaseModel):
     id: str
+    world_id: str = DEFAULT_WORLD_ID
     tree_id: str
     media_type: str  # "comic" or "reel"
     status: ShowcaseJobStatus = ShowcaseJobStatus.QUEUED
