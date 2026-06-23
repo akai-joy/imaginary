@@ -241,41 +241,45 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
 
     if (voiceoverEnabled && panel.caption && synthRef.current) {
       synthRef.current.cancel();
-      const utterance = new SpeechSynthesisUtterance(panel.caption);
-      
-      const voices = synthRef.current.getVoices();
-      // Prioritize high-quality British Male voices (Daniel, Oliver, or Google UK English Male)
-      const targetVoice = voices.find(v => 
-        (v.lang.startsWith("en-GB") || v.lang.startsWith("en_GB")) && 
-        (v.name.includes("Daniel") || v.name.includes("Oliver") || v.name.includes("Male") || v.name.includes("Google"))
-      ) || voices.find(v => 
-        (v.lang.startsWith("en-GB") || v.lang.startsWith("en_GB"))
-      ) || voices.find(v => 
-        v.lang.startsWith("en") && (v.name.includes("Natural") || v.name.includes("Google"))
-      );
 
-      if (targetVoice) {
-        utterance.voice = targetVoice;
-      }
-      
-      utterance.rate = 1.0;
-      utteranceRef.current = utterance;
+      const timeoutId = setTimeout(() => {
+        if (!playing || atChoices) return;
 
-      utterance.onstart = () => {
-        if (video) video.play().catch(() => {});
-      };
+        const utterance = new SpeechSynthesisUtterance(panel.caption);
+        const voices = synthRef.current.getVoices();
+        // Prioritize high-quality British Male voices (Daniel, Oliver, or Google UK English Male)
+        const targetVoice = voices.find(v => 
+          (v.lang.startsWith("en-GB") || v.lang.startsWith("en_GB")) && 
+          (v.name.includes("Daniel") || v.name.includes("Oliver") || v.name.includes("Male") || v.name.includes("Google"))
+        ) || voices.find(v => 
+          (v.lang.startsWith("en-GB") || v.lang.startsWith("en_GB"))
+        ) || voices.find(v => 
+          v.lang.startsWith("en") && (v.name.includes("Natural") || v.name.includes("Google"))
+        );
 
-      utterance.onend = () => {
-        goNext();
-      };
-
-      utterance.onerror = (e) => {
-        if (e.error !== "interrupted") {
-          console.warn("Speech synthesis error", e);
+        if (targetVoice) {
+          utterance.voice = targetVoice;
         }
-      };
 
-      synthRef.current.speak(utterance);
+        utterance.rate = 1.0;
+        utteranceRef.current = utterance;
+
+        utterance.onstart = () => {
+          if (video) video.play().catch(() => {});
+        };
+
+        utterance.onend = () => {
+          goNext();
+        };
+
+        utterance.onerror = (e) => {
+          if (e.error !== "interrupted") {
+            console.warn("Speech synthesis error", e);
+          }
+        };
+
+        synthRef.current.speak(utterance);
+      }, 100);
 
       // Track progress roughly using an interval since SpeechSynthesis doesn't have fine timeupdate
       const startTime = performance.now();
@@ -285,6 +289,7 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
       }, 100);
 
       return () => {
+        clearTimeout(timeoutId);
         clearInterval(interval);
         if (synthRef.current) {
           synthRef.current.cancel();
@@ -322,6 +327,10 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
 
   useEffect(() => {
     const onKey = (e) => {
+      // Don't hijack keys while the user is typing in a field (e.g. the lore composer
+      // drawer opened over the player) — otherwise Space/Arrows never reach the input.
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       if (e.code === "Space") {
         e.preventDefault();
         if (!atChoices) setPlaying((p) => !p);
