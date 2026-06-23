@@ -148,6 +148,20 @@ def intake_router(ctx: Context, node_input: Any):
             user_text = parts[0].text or ""
         author_id = "playground_user"
 
+    # Parse JSON structured payload if sent from the fast_api_app
+    if user_text.strip().startswith("{") and user_text.strip().endswith("}"):
+        try:
+            import json
+            parsed = json.loads(user_text)
+            user_text = parsed.get("user_text", user_text)
+            author_id = parsed.get("author_id", author_id)
+            id_token_str = parsed.get("id_token", id_token_str)
+            world_id = parsed.get("world_id", world_id)
+            derived_from = parsed.get("derived_from", derived_from)
+            references = parsed.get("references", references)
+        except Exception as e:
+            logger.warning("Failed to parse JSON input in intake_router: %s", e)
+
     if derived_from is None:
         derived_from = []
     if references is None:
