@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
+import WorldMap from './pages/WorldMap'
+import Codex from './pages/Codex'
 import Storylines from './pages/Storylines'
 import StorylineDetail from './pages/StorylineDetail'
 import Showcase from './pages/Showcase'
@@ -18,7 +20,9 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Storylines />} />
+        <Route index element={<WorldMap />} />
+        <Route path="codex/:kind" element={<Codex />} />
+        <Route path="storylines" element={<Storylines />} />
         <Route path="showcase" element={<Showcase />} />
         <Route path="submit" element={<Submit />} />
       </Route>

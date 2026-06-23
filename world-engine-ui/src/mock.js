@@ -92,6 +92,119 @@ export const mockShowcase = [
   },
 ]
 
+// --- Living World: world / map / codex / canon (mirrors the additive REST surface) ---
+
+export const mockWorld = {
+  id: 'world_genesis',
+  theme: 'Medieval Wizards',
+  opening_line:
+    'The last spell in the world guttered out at dusk, and every wizard who felt it die began to run.',
+  art_style_directive:
+    'Painterly high-fantasy storybook illustration; candlelit medieval palette; ink-and-watercolor linework.',
+  // Populated by the Atlas agent once locations are painted; null in offline demo.
+  map_image_url: null,
+  status: 'active',
+  // ~5 days of contribution window left — scarcity is the event energy.
+  closes_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 + 14 * 60 * 60 * 1000).toISOString(),
+}
+
+// Locations placed by the Cartographer on a 0–100 plane. `discovered` is per-user fog state.
+export const mockMap = {
+  world: mockWorld,
+  regions: ['The Emberlands', 'The Drowned Coast', 'The Hollow North'],
+  locations: [
+    { id: 'cn_c3d', title: 'The Slag Court', region: 'The Emberlands', x: 38, y: 58,
+      near: ['cn_a1f'], discovered: true, contributor_id: 'mara' },
+    { id: 'cn_a1f', title: 'Forge of the Ashwrights', region: 'The Emberlands', x: 52, y: 66,
+      near: ['cn_c3d'], discovered: true, contributor_id: 'mara' },
+    { id: 'cn_e5f', title: 'The Tideward Archive', region: 'The Drowned Coast', x: 24, y: 30,
+      near: ['cn_c3d'], discovered: true, contributor_id: 'noor' },
+    { id: 'cn_eld', title: 'Eldoria', region: 'The Hollow North', x: 72, y: 22,
+      near: [], discovered: true, contributor_id: 'pia' },
+    { id: 'cn_pass', title: 'The White Pass', region: 'The Hollow North', x: 84, y: 38,
+      near: ['cn_eld'], discovered: false, contributor_id: 'theo' },
+    { id: 'cn_lamp', title: 'Lantern Row', region: 'The Drowned Coast', x: 18, y: 52,
+      near: ['cn_e5f'], discovered: false, contributor_id: 'pia' },
+    { id: 'cn_void', title: 'The Unspelled Waste', region: 'The Emberlands', x: 60, y: 86,
+      near: ['cn_a1f'], discovered: false, contributor_id: 'idris' },
+  ],
+}
+
+export const mockCodex = {
+  characters: [
+    { id: 'cn_b2c', title: 'Sorrel of the Low Fords', contributor_id: 'idris', discovered: true,
+      body: 'A river-clan envoy carrying a borrowed name and a real grievance.' },
+    { id: 'cn_f6a', title: 'Keeper Vol', contributor_id: 'theo', discovered: true,
+      body: 'The only one who can read the salt-stained ledgers — and the only one with reason to forge them.' },
+    { id: 'cn_g7b', title: 'The Lantern', contributor_id: 'pia', discovered: false,
+      body: 'A debt-spirit bound into a streetlamp. It repays every kindness, at ruinous interest.' },
+  ],
+  beasts: [
+    { id: 'cn_drk', title: 'The Slagmaw Drake', contributor_id: 'mara', discovered: true,
+      body: 'It nests in cooling iron and swallows oaths whole; its breath sets poured metal cracking.' },
+    { id: 'cn_tide', title: 'The Ledger Eel', contributor_id: 'noor', discovered: false,
+      body: 'A century-long creature that surfaces only with the Archive, rewriting what it reads.' },
+  ],
+  spells: [
+    { id: 'cn_emb', title: 'The Last Ember', contributor_id: 'mara', discovered: true,
+      body: 'The dying spell every wizard felt go out. To cast it again is to be hunted.' },
+    { id: 'cn_salt', title: 'Salt the Pour', contributor_id: 'idris', discovered: false,
+      body: 'A saboteur’s working that seeds a fault into any oath sworn in metal.' },
+  ],
+}
+
+const TYPE_BY_ID = {
+  cn_c3d: 'location', cn_a1f: 'location', cn_e5f: 'location', cn_eld: 'location',
+  cn_pass: 'location', cn_lamp: 'location', cn_void: 'location',
+  cn_b2c: 'character', cn_f6a: 'character', cn_g7b: 'character',
+  cn_drk: 'beast', cn_tide: 'beast', cn_emb: 'spell', cn_salt: 'spell',
+}
+
+// Detail records returned by GET /canon/:id. Falls back to a synthesized record below.
+export const mockCanon = {
+  cn_c3d: {
+    id: 'cn_c3d', type: 'location', title: 'The Slag Court', contributor_id: 'mara', version: 1,
+    body: 'Where oaths are poured. A cooling floor of black glass that rings when walked.',
+    map_meta: { x: 38, y: 58, region: 'The Emberlands', near: ['cn_a1f'] },
+    references: [{ id: 'cn_a1f', title: 'Forge of the Ashwrights', type: 'location' }],
+    referenced_by: [
+      { id: 'cn_b2c', title: 'Sorrel of the Low Fords', type: 'character' },
+      { id: 'cn_drk', title: 'The Slagmaw Drake', type: 'beast' },
+    ],
+    storylines: ['tre_ember'],
+  },
+  cn_eld: {
+    id: 'cn_eld', type: 'location', title: 'Eldoria', contributor_id: 'pia', version: 2,
+    body: 'A village cupped in a snowy valley, steam rising from its springs like breath on the cold air.',
+    map_meta: { x: 72, y: 22, region: 'The Hollow North', near: [] },
+    references: [],
+    referenced_by: [{ id: 'cn_f6a', title: 'Keeper Vol', type: 'character' }],
+    storylines: ['tre_tide'],
+  },
+}
+
+export function buildCanonFallback(id) {
+  const fromMap = mockMap.locations.find((l) => l.id === id)
+  if (fromMap) {
+    return {
+      id, type: 'location', title: fromMap.title, contributor_id: fromMap.contributor_id, version: 1,
+      body: 'Uncharted lore. Be the first to write what is found here.',
+      map_meta: { x: fromMap.x, y: fromMap.y, region: fromMap.region, near: fromMap.near },
+      references: [], referenced_by: [], storylines: [],
+    }
+  }
+  for (const kind of ['characters', 'beasts', 'spells']) {
+    const e = mockCodex[kind].find((x) => x.id === id)
+    if (e) {
+      return {
+        id, type: TYPE_BY_ID[id] || 'lore', title: e.title, contributor_id: e.contributor_id,
+        version: 1, body: e.body, map_meta: null, references: [], referenced_by: [], storylines: [],
+      }
+    }
+  }
+  return null
+}
+
 export const DEMO = {
   eldoria: {
     id: "eldoria",

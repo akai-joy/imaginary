@@ -1,20 +1,24 @@
-:root {
-  /* Cool bone + oxblood — deliberately not the cream/terracotta default */
-  --paper: #e9ece4;
-  --surface: #f7f8f4;
-  --surface-2: #eef1ea;
-  --ink: #1b1c20;
-  --ink-soft: #5b5d64;
-  --line: #d3d8cd;
-  --plum: #6d1f3c;
-  --plum-deep: #511329;
-  --ochre: #8b600e;
-  --good: #2f6d4f;
-  --blue: #2a5a70;
-  --lore: #785a3a;
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500&display=swap');
 
-  --serif: 'Hoefler Text', 'Iowan Old Style', Palatino, 'Palatino Linotype', Georgia, serif;
-  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+:root {
+  /* Candlelit illuminated atlas — dark vellum, bone ink, oxblood + gold leaf */
+  --paper: #0d0c0a;
+  --surface: #16130d;
+  --surface-2: #1f1a11;
+  --ink: #ece2cd;
+  --ink-soft: #9b8f76;
+  --line: #38301f;
+  --plum: #cd5970;        /* oxblood, lifted to read on dark */
+  --plum-deep: #e3859a;   /* hover = brighter, not darker, on a dark ground */
+  --ochre: #d3ab3c;       /* gold leaf */
+  --gold: #d3ab3c;
+  --good: #6bb98e;
+  --blue: #62acca;
+  --lore: #c8a567;
+
+  --display: 'Cinzel', 'Hoefler Text', Georgia, serif;
+  --serif: 'Spectral', 'Iowan Old Style', Palatino, Georgia, serif;
+  --sans: 'Spectral', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, sans-serif;
   --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
   --radius: 4px;
@@ -27,13 +31,38 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: var(--paper);
+  background:
+    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--ochre) 12%, transparent) 0%, transparent 42%),
+    radial-gradient(100% 120% at 50% 120%, color-mix(in srgb, var(--plum) 9%, transparent) 0%, transparent 50%),
+    var(--paper);
+  background-attachment: fixed;
   color: var(--ink);
-  font-family: var(--sans);
+  font-family: var(--serif);
   font-size: 16px;
-  line-height: 1.55;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Aged-vellum grain + edge vignette laid over everything (non-interactive). */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  box-shadow: inset 0 0 220px 40px rgba(0, 0, 0, 0.6);
+}
+.app, .login, .player-page-immersive { position: relative; z-index: 2; }
 
 a { color: inherit; }
 
@@ -54,17 +83,19 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 16px 28px;
-  background: var(--surface);
+  padding: 14px 28px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(10px) saturate(1.1);
   border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--gold) 18%, transparent);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
 }
 
-.brand { display: flex; align-items: baseline; gap: 8px; }
-.brand-mark { color: var(--plum); font-family: var(--mono); font-size: 18px; }
-.brand-word { font-family: var(--serif); font-size: 20px; letter-spacing: 0.01em; }
+.brand { display: flex; align-items: baseline; gap: 9px; }
+.brand-mark { color: var(--gold); font-family: var(--display); font-size: 18px; text-shadow: 0 0 14px color-mix(in srgb, var(--gold) 50%, transparent); }
+.brand-word { font-family: var(--display); font-size: 19px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .nav { display: flex; gap: 22px; margin-left: 8px; }
 .nav a {
@@ -101,7 +132,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------- Page headers ---------- */
 .page-head { margin-bottom: 28px; }
-.page-head h1 { font-family: var(--serif); font-size: 34px; margin: 0 0 6px; font-weight: 600; }
+.page-head h1 { font-family: var(--display); font-size: 34px; margin: 0 0 6px; font-weight: 600; letter-spacing: 0.02em; }
 .page-sub { color: var(--ink-soft); margin: 0; max-width: 60ch; }
 .page.narrow { max-width: 640px; }
 
@@ -509,6 +540,292 @@ button { font-family: inherit; cursor: pointer; }
 .state-immersive {
   text-align: center;
   padding: 80px 20px;
+}
+
+/* ===================================================================
+   LIVING WORLD — entry hero, world banner, atlas map, codex
+   =================================================================== */
+
+/* Staggered reveal: set style="--i:N" on children of a .reveal-group */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.reveal { opacity: 0; animation: rise 0.7s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: calc(var(--i, 0) * 90ms); }
+
+/* ---------- World-entry: the opening_line as a threshold ---------- */
+.world-entry {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 8vh 24px;
+  background:
+    radial-gradient(80% 60% at 50% 38%, color-mix(in srgb, var(--ochre) 14%, transparent), transparent 70%),
+    radial-gradient(120% 120% at 50% 120%, color-mix(in srgb, var(--plum) 16%, transparent), transparent 60%),
+    #080705;
+  animation: fade 0.6s ease;
+}
+.world-entry.is-leaving { animation: entryOut 0.9s ease forwards; }
+@keyframes entryOut { to { opacity: 0; transform: scale(1.04); visibility: hidden; } }
+.we-inner { max-width: 880px; }
+.we-eyebrow {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.32em; text-transform: uppercase;
+  color: var(--gold); margin: 0 0 6px;
+}
+.we-theme { font-family: var(--display); font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-soft); font-size: 14px; margin: 0 0 38px; }
+.we-line {
+  font-family: var(--serif); font-style: italic; font-weight: 400;
+  font-size: clamp(26px, 4.6vw, 54px); line-height: 1.28; color: var(--ink);
+  margin: 0 auto 44px; max-width: 22ch;
+  text-shadow: 0 2px 40px color-mix(in srgb, var(--ochre) 30%, transparent);
+}
+.we-line .glow { color: var(--gold); }
+.we-enter {
+  font-family: var(--mono); font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink); background: transparent; border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  border-radius: 999px; padding: 13px 30px; transition: all 0.2s;
+}
+.we-enter:hover { background: color-mix(in srgb, var(--gold) 16%, transparent); border-color: var(--gold);
+  box-shadow: 0 0 30px color-mix(in srgb, var(--gold) 30%, transparent); }
+.we-skip { display: block; margin: 22px auto 0; background: none; border: none; color: var(--ink-soft);
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; }
+.we-skip:hover { color: var(--ink); }
+
+/* ---------- World banner (under the topbar) ---------- */
+.world-banner {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  max-width: var(--maxw); margin: 0 auto; padding: 22px 28px 4px;
+}
+.wb-mark { font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); }
+.wb-theme { font-family: var(--display); font-size: 26px; font-weight: 600; letter-spacing: 0.03em; margin: 2px 0 0; }
+.wb-line { font-family: var(--serif); font-style: italic; color: var(--ink-soft); margin: 4px 0 0; max-width: 56ch; }
+.wb-clock {
+  margin-left: auto; text-align: right; font-family: var(--mono);
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent); border-radius: var(--radius);
+  padding: 8px 14px; background: color-mix(in srgb, var(--gold) 6%, transparent);
+}
+.wb-clock .t { display: block; font-size: 19px; color: var(--gold); letter-spacing: 0.04em; }
+.wb-clock .l { display: block; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); margin-top: 2px; }
+
+/* ---------- The Atlas (fog-of-war map) ---------- */
+.atlas-wrap { max-width: min(1320px, 96vw); margin: 0 auto; padding: 8px 24px 70px; }
+.atlas {
+  position: relative;
+  width: 100%;
+  height: 74vh;
+  min-height: 460px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background:
+    radial-gradient(70% 90% at 30% 25%, color-mix(in srgb, var(--blue) 12%, transparent), transparent 60%),
+    radial-gradient(60% 80% at 78% 70%, color-mix(in srgb, var(--good) 10%, transparent), transparent 60%),
+    radial-gradient(90% 90% at 50% 50%, var(--surface-2), var(--surface) 70%, #0c0a07 100%);
+  box-shadow: inset 0 0 120px rgba(0,0,0,.55), 0 18px 60px rgba(0,0,0,.5);
+}
+.atlas.is-grabbing { cursor: grabbing; }
+/* The transformable square the map lives on (0–100 coord space maps to it 1:1). */
+.atlas-stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  transform-origin: center center;
+  will-change: transform;
+}
+.atlas-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.atlas-zoom-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+  backdrop-filter: blur(6px);
+  transition: color 0.15s, border-color 0.15s;
+}
+.atlas-zoom-btn:hover { color: var(--gold); border-color: var(--gold); }
+/* faint cartographic graticule */
+.atlas::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--line) 60%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 60%, transparent) 1px, transparent 1px);
+  background-size: 11.11% 11.11%, 11.11% 11.11%;
+  mask-image: radial-gradient(120% 120% at 50% 50%, #000 55%, transparent 95%);
+}
+.atlas-roads { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+.atlas-road { stroke: color-mix(in srgb, var(--gold) 38%, transparent); stroke-width: 0.4; stroke-dasharray: 1.4 1.2; fill: none; }
+
+/* The master map canvas the Atlas agent paints into (Phase 2 backdrop). */
+.atlas-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  z-index: 0; opacity: 0.97; animation: fade 0.8s ease; user-select: none; -webkit-user-drag: none;
+}
+/* Per-location painterly tiles (Phase 1), feathered so they read like map art. */
+.place-tile {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 20%; max-width: 220px; height: auto; pointer-events: none; z-index: 1;
+  -webkit-mask-image: radial-gradient(closest-side, #000 58%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 58%, transparent 100%);
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.55));
+  animation: tileIn 0.8s cubic-bezier(.2,.7,.2,1) forwards;
+}
+@keyframes tileIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.place {
+  position: absolute; transform: translate(-50%, -50%); z-index: 3;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  background: none; border: none; cursor: pointer; width: max-content; max-width: 160px;
+}
+.place-pin {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3cf, var(--gold) 55%, #7a5e12 100%);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--gold) 16%, transparent), 0 0 22px color-mix(in srgb, var(--gold) 60%, transparent);
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.place-name {
+  font-family: var(--display); font-size: 12px; letter-spacing: 0.06em; color: var(--ink);
+  white-space: nowrap; padding: 3px 10px; border-radius: 3px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+}
+.place-region { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
+.place:hover .place-pin { transform: scale(1.25); box-shadow: 0 0 0 6px color-mix(in srgb, var(--gold) 22%, transparent), 0 0 30px color-mix(in srgb, var(--gold) 80%, transparent); }
+.place:hover .place-name { color: var(--gold); }
+
+/* fogged (revealed but undiscovered) places: silhouettes inviting exploration */
+.place.is-fog .place-pin {
+  background: radial-gradient(circle at 40% 35%, #44403a, #211d16 70%);
+  box-shadow: 0 0 0 5px rgba(255,255,255,.03), inset 0 0 6px #000;
+  filter: blur(.3px);
+}
+.place.is-fog .place-name { color: var(--ink-soft); opacity: 0.65; font-style: italic; filter: blur(.4px); }
+.place.is-fog:hover .place-name { opacity: 1; filter: none; color: var(--ink); }
+.place.is-fog:hover .place-pin { filter: none; }
+
+/* Fog of war: opaque mist over the map with feathered clear holes at discovered places. */
+.atlas-fog { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+
+/* Single hover card (markers stay clean; one card at a time). */
+.place-card {
+  position: absolute; z-index: 4;
+  transform: translate(14px, -110%);
+  width: 260px; display: flex; gap: 12px; padding: 12px;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  border-radius: 8px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  animation: fade 0.18s ease;
+}
+.pc-thumb { width: 84px; height: 84px; object-fit: cover; border-radius: 5px; flex: none; border: 1px solid var(--line); }
+.pc-body { min-width: 0; }
+.pc-title { font-family: var(--display); font-size: 16px; font-weight: 600; color: var(--ink); }
+.pc-region { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); margin-top: 2px; }
+.pc-text { font-family: var(--serif); font-size: 12.5px; color: var(--ink-soft); margin: 6px 0 8px; line-height: 1.4; }
+.pc-explore { background: none; border: none; padding: 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); cursor: pointer; }
+.pc-explore:hover { color: var(--plum-deep); }
+
+.atlas-legend {
+  display: flex; gap: 22px; flex-wrap: wrap; align-items: center;
+  margin: 16px 2px 0; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em;
+}
+.atlas-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.atlas-legend .dot.lit { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.atlas-legend .dot.fog { background: #3a352c; }
+.atlas-legend .frontier { margin-left: auto; color: var(--gold); }
+
+/* ---------- Place / entity drawer ---------- */
+.drawer-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(6,5,4,.6); backdrop-filter: blur(2px); animation: fade .25s ease; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 41; width: min(440px, 92vw);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border-left: 1px solid color-mix(in srgb, var(--gold) 25%, transparent);
+  box-shadow: -30px 0 80px rgba(0,0,0,.6);
+  padding: 26px 26px 40px; overflow-y: auto; animation: drawerIn .32s cubic-bezier(.2,.7,.2,1);
+}
+@keyframes drawerIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.drawer-close { position: absolute; top: 16px; right: 18px; background: none; border: none; color: var(--ink-soft); font-size: 22px; line-height: 1; }
+.drawer-close:hover { color: var(--gold); }
+.drawer-kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); }
+.drawer h2 { font-family: var(--display); font-size: 26px; font-weight: 600; margin: 8px 0 4px; }
+.drawer-body { font-family: var(--serif); color: var(--ink); margin: 14px 0 0; line-height: 1.7; }
+.drawer-rel { margin-top: 22px; }
+.drawer-rel h3 { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 10px; }
+.rel-chip {
+  display: inline-flex; align-items: center; gap: 7px; margin: 0 8px 8px 0; padding: 5px 11px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface); cursor: pointer;
+  font-family: var(--serif); font-size: 13px; color: var(--ink); transition: border-color .15s, color .15s;
+}
+.rel-chip:hover { border-color: var(--gold); color: var(--gold); }
+.rel-chip .rc-type { font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); }
+.drawer-add {
+  display: block; width: 100%; margin-top: 26px; text-align: center; text-decoration: none;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: #1a1408; background: linear-gradient(180deg, #e8c64f, var(--gold)); border-radius: var(--radius);
+  padding: 13px; font-weight: 600; transition: filter .15s;
+}
+.drawer-add:hover { filter: brightness(1.08); }
+
+/* ---------- Codex (Characters / Bestiary / Grimoire) ---------- */
+.codex-tabs { display: flex; gap: 8px; margin: 0 0 26px; flex-wrap: wrap; }
+.codex-tab {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px;
+  transition: all 0.15s;
+}
+.codex-tab:hover { color: var(--ink); border-color: var(--ink-soft); }
+.codex-tab.active { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 50%, transparent); background: color-mix(in srgb, var(--gold) 8%, transparent); }
+.codex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
+.codex-card {
+  position: relative; text-align: left; cursor: pointer;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--line); border-radius: 6px; padding: 18px; overflow: hidden;
+  transition: transform .18s, border-color .18s, box-shadow .18s;
+}
+.codex-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: .5; }
+.codex-card:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--gold) 45%, transparent); box-shadow: 0 12px 34px rgba(0,0,0,.5); }
+.cc-rune { font-family: var(--display); font-size: 30px; color: var(--gold); opacity: .9; text-shadow: 0 0 18px color-mix(in srgb, var(--gold) 45%, transparent); }
+.cc-title { font-family: var(--display); font-size: 18px; font-weight: 600; margin: 12px 0 0; letter-spacing: .02em; }
+.cc-body { font-family: var(--serif); color: var(--ink-soft); font-size: 14px; margin: 8px 0 0; line-height: 1.55; }
+.cc-by { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); margin-top: 14px; }
+.codex-card.is-fog .cc-title, .codex-card.is-fog .cc-body { filter: blur(4px); opacity: .55; user-select: none; }
+.codex-card.is-fog .cc-rune { color: var(--ink-soft); }
+.cc-lock {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft);
+  background: radial-gradient(circle at 50% 50%, transparent, rgba(8,7,5,.35));
+}
+.cc-lock .lk { font-size: 18px; color: var(--gold); opacity: .8; }
+.codex-card.is-fog:hover .cc-title, .codex-card.is-fog:hover .cc-body { filter: blur(2px); }
+
+@media (max-width: 760px) {
+  .world-banner { padding: 16px 18px 0; }
+  .wb-clock { margin-left: 0; }
+  .atlas-wrap { padding: 8px 12px 50px; }
+  .place-name { font-size: 11px; }
 }
 
 
