@@ -103,7 +103,26 @@ export default function WorldMap() {
   if (error) return <div className="state state-error">Could not chart the world: {error}</div>
   if (!map) return <div className="state">Charting the world…</div>
 
-  const locations = map.locations.map(placeLocation)
+  const baseLocations = map.locations.map(placeLocation)
+  const locations = []
+  const coordCount = {}
+
+  for (const rawLoc of baseLocations) {
+    const loc = { ...rawLoc }
+    const key = `${loc.x.toFixed(2)},${loc.y.toFixed(2)}`
+    if (coordCount[key]) {
+      const count = coordCount[key]
+      coordCount[key] += 1
+      const angle = (count * 2 * Math.PI) / 6
+      const r = 3.0 // radial offset radius in percent
+      loc.x = Math.max(2, Math.min(98, loc.x + r * Math.cos(angle)))
+      loc.y = Math.max(2, Math.min(98, loc.y + r * Math.sin(angle)))
+    } else {
+      coordCount[key] = 1
+    }
+    locations.push(loc)
+  }
+
   const byId = Object.fromEntries(locations.map((l) => [l.id, l]))
   const discovered = locations.filter((l) => l.discovered)
   const canvasUrl = getCleanUrl(map.world?.map_image_url)
