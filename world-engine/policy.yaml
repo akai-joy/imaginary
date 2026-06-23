@@ -68,12 +68,12 @@ showcase:
     default: comic                       # every qualifying tree gets a cheap comic
     reel_for_top_n: 1                    # ONLY the single top tree per cycle gets a reel
     comic:
-      provider: openai                   # openai (gpt-image-1) | imagen
+      provider: imagen                   # Google-native image generation (Imagen / Gemini image)
       panels: { min: 6, max: 8 }
     reel:
       provider: veo
       model_tier: lite                   # lite | fast | quality
-      audio: false                       # Veo silent; ElevenLabs VO layered on top
+      audio: false                       # Veo silent; Gemini TTS VO layered on top
       aspect_ratio: "9:16"
       max_clip_seconds: 8                # Veo hard limit per generation
       scenes: 3                          # chained -> ~24s reel
@@ -88,16 +88,14 @@ showcase:
 # ---------------------------------------------------------------------------
 media_providers:
   image:
-    provider: openai                     # openai | imagen
-    model: gpt-image-1                   # gpt-image-1 | gpt-image-1-mini
+    provider: imagen                     # Google-native: Vertex AI Imagen / Gemini image
+    model: imagen-3.0-generate-002       # matches app/agents/media.py (Gemini image as fallback)
     quality: medium                      # low | medium | high
     size_landscape: "1536x1024"
     size_portrait: "1024x1536"
-    secret: OPENAI_API_KEY
   voice:
-    provider: elevenlabs
-    model: eleven_multilingual_v2        # set to your preferred ElevenLabs model
-    secret: ELEVENLABS_API_KEY
+    provider: gemini                     # Google-native Gemini text-to-speech
+    model: gemini-2.5-flash-preview-tts
     settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0 }
   video:
     provider: veo
@@ -106,8 +104,8 @@ media_providers:
     silent: true                         # narration comes from the voice provider
   # Per-character voices so a character sounds the same everywhere it appears.
   voice_registry:
-    _narrator: "REPLACE_WITH_VOICE_ID"
-    # <character_canon_id>: "<elevenlabs_voice_id>"
+    _narrator: "Kore"                    # Gemini TTS prebuilt voice name
+    # <character_canon_id>: "<gemini_tts_voice_name>"
   # Per-panel media tiering for the explorable-graph scenes.
   panel_tiering:
     default_kind: image                  # every panel = image + VO

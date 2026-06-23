@@ -83,9 +83,9 @@ Ordered nodes:
 3. **Moderation (re-check)** — the storyboard passes back through the Moderation node
    plus the **Media content policy** below, BEFORE any image/video is generated.
 4. **Media** — generate through the provider interfaces (see "Media generation
-   providers"): `comic` → one image per panel via the image provider (default OpenAI
-   `gpt-image-1`) with a consistent style directive; `reel` → each scene via Veo in
-   **9:16**, **≤8s per clip** chained, run **silent** with the ElevenLabs VO layered on
+   providers"): `comic` → one image per panel via the image provider (Imagen) with a
+   consistent style directive; `reel` → each scene via Veo in
+   **9:16**, **≤8s per clip** chained, run **silent** with the Gemini TTS VO layered on
    top. Cache every asset; never regenerate identical content.
 5. **Publish/Handoff** — write an auto-generated caption + hashtags, save the final
    asset to a **GCS bucket** with a public URL, build the Instagram content-publishing
@@ -97,21 +97,20 @@ Veo is reserved for the single top tree per cycle. Veo clips carry an embedded
 SynthID watermark (note this as a responsible-AI point in the writeup).
 
 ## Media generation providers
-All generation goes through provider interfaces (swap via `policy.yaml`; keys in Secret
-Manager — never in code, prompts, or the client):
-- **ImageProvider** — default **OpenAI `gpt-image-1`** (Images API
-  `/v1/images/generations`; sizes 1024×1024 / 1536×1024 / 1024×1536; quality
-  low|medium|high; returns b64/URL; embeds **C2PA** provenance). **Imagen** kept as a
-  drop-in alternative for a fully Google-native build (capstone hedge).
-- **VoiceProvider** — **ElevenLabs** TTS (`/v1/text-to-speech/{voice_id}`); per-character
-  `voice_id` from the voice registry; returns mp3. Generated once and cached, exactly like
-  the existing podcast pipeline.
-- **VideoProvider** — **Veo** (9:16, ≤8s/clip, chained; run **silent** so the ElevenLabs VO
+A **fully Google-native** media stack — every provider is a Gemini/Vertex AI service, so
+the only secret is Google credentials. All generation goes through provider interfaces
+(swap via `policy.yaml`; keys in Secret Manager — never in code, prompts, or the client):
+- **ImageProvider** — **Vertex AI Imagen** (`imagen-3.0-generate-002`), with **Gemini
+  image** (`gemini-3.1-flash-image`) as the in-code fallback; sizes 1024×1024 /
+  1536×1024 / 1024×1536; quality low|medium|high; embeds **SynthID** provenance.
+- **VoiceProvider** — **Gemini TTS** (`gemini-2.5-flash-preview-tts`); per-character
+  prebuilt voice name from the voice registry; returns audio bytes. Generated once and cached.
+- **VideoProvider** — **Veo** (9:16, ≤8s/clip, chained; run **silent** so the Gemini TTS VO
   is layered on top; SynthID embedded).
 
 Each provider returns bytes/URL; the pipeline uploads to Firebase Storage / GCS and records
-the URL on a `MediaAsset`. Secrets: `OPENAI_API_KEY`, `ELEVENLABS_API_KEY`, Google creds —
-all from Secret Manager, server-side only.
+the URL on a `MediaAsset`. Secrets: Google credentials only — all from Secret Manager,
+server-side only.
 
 ## Scene model & per-node media pipeline (explorable graph)
 The explorable-graph player consumes **Scenes** (one per canon node):
@@ -120,7 +119,7 @@ The explorable-graph player consumes **Scenes** (one per canon node):
   image_url, video_url, audio_url, duration_ms`.
 - **Choice**: `{ label, to(scene_id | null) }` — edges are `derived_from` links; `null` = ending.
 
-**Voice registry**: `voices = { <character_canon_id>: <elevenlabs_voice_id>, "_narrator": <id> }`.
+**Voice registry**: `voices = { <character_canon_id>: <gemini_tts_voice_name>, "_narrator": <name> }`.
 The Storyboard/Narrator step tags each panel's caption with a `speaker`; the pipeline picks the
 matching voice so characters sound consistent across the whole world.
 

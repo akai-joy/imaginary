@@ -1,10 +1,9 @@
 active_profile: default
 media_providers:
   image:
-    model: gpt-image-1
-    provider: openai
+    model: imagen-3.0-generate-002
+    provider: imagen
     quality: medium
-    secret: OPENAI_API_KEY
     size_landscape: 1536x1024
     size_portrait: 1024x1536
   panel_tiering:
@@ -17,15 +16,14 @@ media_providers:
     provider: veo
     silent: true
   voice:
-    model: eleven_multilingual_v2
-    provider: elevenlabs
-    secret: ELEVENLABS_API_KEY
+    model: gemini-2.5-flash-preview-tts
+    provider: gemini
     settings:
       similarity_boost: 0.75
       stability: 0.5
       style: 0.0
   voice_registry:
-    _narrator: REPLACE_WITH_VOICE_ID
+    _narrator: Kore
 models:
   cartographer: gemini-2.5-flash
   continuity: gemini-2.5-flash
@@ -133,7 +131,7 @@ showcase:
       panels:
         max: 8
         min: 6
-      provider: openai
+      provider: imagen
     default: comic
     reel:
       aspect_ratio: '9:16'
