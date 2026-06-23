@@ -236,6 +236,27 @@ The canon is browsed as a **living video-game world that grows as people contrib
 (clamping `{x,y}` to map bounds). Non-spatial types pass through. The world self-assembles from
 the lore text — users never place pins. Follows the **proposal → controller** invariant.
 
+**Atlas Illustrator (agents draw the map — "The Living Atlas").** An async image agent
+(`app/agents/atlas_illustrator.py`, never in the sync ingest path) fires when a `location` is
+accepted **and** placed: it generates a painterly map tile for the place (via the media
+provider, cached, mock fallback offline) and the deterministic `cartography_controller_node`
+performs all side effects (GCS-prefix-confined writes, `map_tile` MediaAsset, `World.map_image_url`
+bump) — proposal → controller, moderation re-screened before generation, SynthID preserved. The
+frontend renders this as **The Living Atlas**: a fixed, pannable/zoomable world under a **fog of
+war** that clears around discovered places, with clean markers and a single **hover card**
+(tile thumbnail + lore snippet + Explore) — never stacked cards on the map. `MediaAsset` carries
+`node_id`/`world_id`; `World` carries `map_image_url`/`map_image_version`.
+
+**Planned next (not yet built — agreed for follow-up):**
+- **Min-distance spacing (Poisson-disc).** The Cartographer/controller must reject placements
+  within a per-type minimum distance of existing locations so markers never overlap (fixes
+  neighbours like Eldoria/Kettle crowding) — *without* adopting a fixed pre-generated slot model.
+  Keep emergent, agent-placed geography; just enforce spacing.
+- **Generate one clean base map, don't composite tiles.** Instead of stamping each tile onto a
+  master canvas (rough), generate a single labelless base world map **once** per world as the
+  fog-able backdrop; per-location tiles stay as hover-card thumbnails only. This is the path to a
+  seamless, professional-looking atlas.
+
 **Growth / unlock = a reveal layer, not new tables of truth.** Global reveal is just
 `status=accepted`; the personal fog overlay is the `Discovery` table. No per-user forks of canon.
 
