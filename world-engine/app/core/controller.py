@@ -22,9 +22,21 @@ from google.adk.agents.context import Context
 from google.adk.events.event import Event
 
 from app.core.store import get_store
-from app.core.types import CanonEntry, Contribution, LedgerEntry, MediaAsset, ShowcaseJob, ContributionStatus, ShowcaseJobStatus
+from app.core.types import CanonEntry, Contribution, LedgerEntry, MapMeta, MediaAsset, ShowcaseJob, ContributionStatus, ShowcaseJobStatus
 
 logger = logging.getLogger(__name__)
+
+# Normalized world-map bounds. The controller (never the LLM) is authoritative for
+# clamping Cartographer-proposed coordinates into this range.
+MAP_MIN = 0.0
+MAP_MAX = 100.0
+
+
+def _clamp_coord(value) -> float:
+    try:
+        return max(MAP_MIN, min(MAP_MAX, float(value)))
+    except (TypeError, ValueError):
+        return MAP_MIN
 
 
 def ingest_controller_node(ctx: Context, node_input: Contribution):
@@ -82,6 +94,24 @@ def ingest_controller_node(ctx: Context, node_input: Contribution):
             # Scope the canon entry to the contribution's world (trusted structure,
             # stamped deterministically — never inferred by an LLM node).
             new_entry.world_id = contrib.world_id
+
+            # Apply the Cartographer's map placement proposal. The controller is the
+            # only writer of map_meta and clamps coordinates to the map bounds.
+            cartographer_proposal = ctx.state.get("cartographer_proposal")
+            if cartographer_proposal:
+                map_meta_data = cartographer_proposal.get("map_meta")
+                if map_meta_data:
+                    new_entry.map_meta = MapMeta(
+                        x=_clamp_coord(map_meta_data.get("x")),
+                        y=_clamp_coord(map_meta_data.get("y")),
+                        region=map_meta_data.get("region", ""),
+                        near=list(map_meta_data.get("near", [])),
+                    )
+                # A character/beast/spell is anchored by referencing its "located-in"
+                # place, so the place's detail can list who/what is found there.
+                located_in = cartographer_proposal.get("located_in")
+                if located_in and located_in not in new_entry.references:
+                    new_entry.references.append(located_in)
 
             # Honour the lineage/refs the contributor chose in the UI: trusted structure,
             # applied deterministically here rather than inferred by the Provenance LLM.

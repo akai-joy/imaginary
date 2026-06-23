@@ -16,6 +16,7 @@ models:
   moderation:      gemini-flash
   continuity:      gemini-flash
   scoring:         gemini-flash
+  cartographer:    gemini-flash         # cheap structured map-placement proposal
   narrator:        gemini-pro
   storyboard:      gemini-pro
   security_screen: gemini-flash-lite     # cheap pre-screen; NOT the only defense

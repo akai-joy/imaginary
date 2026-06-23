@@ -49,6 +49,11 @@ AGENT_TOOL_ALLOWLIST = {
     "provenance": ["list_canon_entries", "get_canon_entry"],
     "scoring": ["get_points_for_contribution"],
     "narrator": [],
+    "cartographer": [
+        "list_canon_entries",
+        "list_canon_entries_by_type",
+        "get_canon_entry",
+    ],
     "showcase_tally": [
         "list_canon_entries",
         "get_canon_entry",

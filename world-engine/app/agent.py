@@ -20,6 +20,7 @@ from google.adk.workflow import Edge, Workflow
 from google.adk.workflow._graph import START
 from google.adk.workflow.utils._workflow_graph_utils import build_node
 
+from app.agents.cartographer import cartographer_node
 from app.agents.continuity import continuity_node
 from app.agents.intake import intake_router
 from app.agents.moderation import moderation_node
@@ -56,6 +57,7 @@ continuity_node_node = build_node(continuity_node)
 provenance_node_node = build_node(provenance_node)
 scoring_node_node = build_node(scoring_node)
 narrator_node_node = build_node(narrator_node)
+cartographer_node_node = build_node(cartographer_node)
 controller_node_node = build_node(ingest_controller_node)
 
 # Root workflow skeleton for the world engine ingest pipeline
@@ -84,6 +86,10 @@ root_workflow = Workflow(
         ),
         Edge(
             from_node=narrator_node_node,
+            to_node=cartographer_node_node,
+        ),
+        Edge(
+            from_node=cartographer_node_node,
             to_node=controller_node_node,
         ),
     ],
