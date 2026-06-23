@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApi } from '../api'
 import LoreDrawer from '../components/LoreDrawer'
+import ComposerDrawer from '../components/ComposerDrawer'
 
 // Stable 0..1 hash from a string so a given id always lands in the same spot.
 function hash01(str, salt) {
@@ -25,6 +26,14 @@ function snippet(text, n = 110) {
   return text.slice(0, text.lastIndexOf(' ', n)) + '…'
 }
 
+function getCleanUrl(url) {
+  if (!url) return ''
+  if (url.startsWith('http://localhost:8000/')) {
+    return url.replace('http://localhost:8000/', '/')
+  }
+  return url
+}
+
 const MIN_ZOOM = 0.6
 const MAX_ZOOM = 5
 const clampZoom = (z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
@@ -35,6 +44,7 @@ export default function WorldMap() {
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
   const [hovered, setHovered] = useState(null)
+  const [composeFor, setComposeFor] = useState(null)
 
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
@@ -96,7 +106,7 @@ export default function WorldMap() {
   const locations = map.locations.map(placeLocation)
   const byId = Object.fromEntries(locations.map((l) => [l.id, l]))
   const discovered = locations.filter((l) => l.discovered)
-  const canvasUrl = map.world?.map_image_url
+  const canvasUrl = getCleanUrl(map.world?.map_image_url)
   const hoveredLoc = hovered ? byId[hovered] : null
 
   return (
@@ -185,7 +195,7 @@ export default function WorldMap() {
                 onMouseLeave={() => setHovered(null)}
               >
                 {hoveredLoc.tile_url && (
-                  <img className="pc-thumb" src={hoveredLoc.tile_url} alt=""
+                  <img className="pc-thumb" src={getCleanUrl(hoveredLoc.tile_url)} alt=""
                     onError={(e) => { e.currentTarget.style.display = 'none' }} />
                 )}
                 <div className="pc-body">
@@ -212,6 +222,15 @@ export default function WorldMap() {
           onClose={() => setSelected(null)}
           onNavigate={(id) => setSelected(id)}
           onDiscovered={onDiscovered}
+          onCompose={(id) => { setSelected(null); setComposeFor(id) }}
+        />
+      )}
+
+      {composeFor && (
+        <ComposerDrawer
+          referenceId={composeFor}
+          onClose={() => setComposeFor(null)}
+          onSuccess={load}
         />
       )}
     </>

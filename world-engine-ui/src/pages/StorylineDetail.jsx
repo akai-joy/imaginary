@@ -4,6 +4,7 @@ import { useApi } from '../api'
 import Thread from '../components/Thread'
 import VoteButton from '../components/VoteButton'
 import ScenePlayer from '../components/ScenePlayer'
+import ComposerDrawer from '../components/ComposerDrawer'
 
 export default function StorylineDetail() {
   const { treeId } = useParams()
@@ -12,6 +13,8 @@ export default function StorylineDetail() {
   const [error, setError] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [viewMode, setViewMode] = useState('player')
+  // The node a "Continue" action will build on (derived_from). null = drawer closed.
+  const [continueFrom, setContinueFrom] = useState(null)
 
   useEffect(() => {
     let live = true
@@ -42,6 +45,11 @@ export default function StorylineDetail() {
       </div>
     )
 
+  // Nodes arrive in lineage order; the last is the thread's tip. Continuing from the
+  // tip extends the story; continuing from an earlier node forks it.
+  const nodes = story.nodes || []
+  const tipId = nodes.length ? nodes[nodes.length - 1].id : story.tree_id
+
   return (
     <div className="player-page-immersive">
       <header className="immersive-header">
@@ -60,6 +68,15 @@ export default function StorylineDetail() {
             onClick={() => setViewMode('list')}
           >
             📜 Lineage List
+          </button>
+          {/* Continue the thread from its latest beat (the tip), or the root if empty. */}
+          <button
+            className="btn-continue-story"
+            onClick={() =>
+              setContinueFrom(tipId)
+            }
+          >
+            ✦ Continue this story
           </button>
         </div>
       </header>
@@ -107,11 +124,22 @@ export default function StorylineDetail() {
                       </>
                     )}
                   </p>
+                  <button className="node-continue" onClick={() => setContinueFrom(n.id)}>
+                    ✦ {n.id === tipId ? 'Continue from here' : 'Fork from here'}
+                  </button>
                 </div>
               </li>
             ))}
           </ol>
         </div>
+      )}
+
+      {continueFrom && (
+        <ComposerDrawer
+          continueId={continueFrom}
+          onClose={() => setContinueFrom(null)}
+          onSuccess={() => setReloadKey((k) => k + 1)}
+        />
       )}
     </div>
   )

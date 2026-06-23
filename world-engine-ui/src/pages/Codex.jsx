@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { NavLink, useParams } from 'react-router-dom'
 import { useApi } from '../api'
 import LoreDrawer from '../components/LoreDrawer'
+import ComposerDrawer from '../components/ComposerDrawer'
 
 const KINDS = [
-  { slug: 'characters', label: 'Characters', rune: '☉', blurb: 'The souls who walk this world.' },
-  { slug: 'beasts', label: 'Bestiary', rune: '✺', blurb: 'The creatures that haunt its edges.' },
-  { slug: 'spells', label: 'Grimoire', rune: '✶', blurb: 'The workings that bend it.' },
+  { slug: 'characters', label: 'Characters', rune: '☉', blurb: 'The souls who walk this world.', type: 'character' },
+  { slug: 'beasts', label: 'Bestiary', rune: '✺', blurb: 'The creatures that haunt its edges.', type: 'beast' },
+  { slug: 'spells', label: 'Grimoire', rune: '✶', blurb: 'The workings that bend it.', type: 'spell' },
 ]
 
 export default function Codex() {
@@ -16,6 +17,11 @@ export default function Codex() {
   const [items, setItems] = useState(null)
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
+  const [composeFor, setComposeFor] = useState(null)
+
+  const refresh = useCallback(() => {
+    api.getCodex(kind).then(setItems).catch((e) => setError(e.message))
+  }, [api, kind])
 
   useEffect(() => {
     let alive = true
@@ -81,6 +87,16 @@ export default function Codex() {
           onClose={() => setSelected(null)}
           onNavigate={(id) => setSelected(id)}
           onDiscovered={onDiscovered}
+          onCompose={(id) => { setSelected(null); setComposeFor(id) }}
+        />
+      )}
+
+      {composeFor && (
+        <ComposerDrawer
+          referenceId={composeFor}
+          initialType={meta.type}
+          onClose={() => setComposeFor(null)}
+          onSuccess={refresh}
         />
       )}
     </>

@@ -5,7 +5,9 @@ import { useApi } from '../api'
 const RUNE = { location: '⛰', character: '☉', beast: '✺', spell: '✶', faction: '⚑', plot: '❧', lore: '✜' }
 
 // Slide-over detail for any canon entity. Opening it discovers the node (clears fog).
-export default function LoreDrawer({ id, onClose, onNavigate, onDiscovered }) {
+// `onCompose(id)` is optional: when provided, "Add connected lore" opens the inline
+// composer in place; otherwise it deep-links to the full-page /submit form.
+export default function LoreDrawer({ id, onClose, onNavigate, onDiscovered, onCompose }) {
   const api = useApi()
   const [rec, setRec] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -70,9 +72,15 @@ export default function LoreDrawer({ id, onClose, onNavigate, onDiscovered }) {
               </div>
             )}
 
-            <Link className="drawer-add" to={`/submit?references=${rec.id}`}>
-              ✦ Add lore here
-            </Link>
+            {onCompose ? (
+              <button type="button" className="drawer-add" onClick={() => onCompose(rec.id)}>
+                ✦ Add connected lore
+              </button>
+            ) : (
+              <Link className="drawer-add" to={`/submit?references=${rec.id}`}>
+                ✦ Add connected lore
+              </Link>
+            )}
           </>
         )}
       </aside>

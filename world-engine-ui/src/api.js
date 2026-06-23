@@ -151,7 +151,9 @@ export function useApi() {
         return request('/showcase', { token: await getToken() })
       },
 
-      // POST /contribute { title, type, body } -> { status, verdict, score, message }
+      // POST /contribute { title, type, body, derived_from?, references? }
+      //   derived_from = lineage you're *continuing* (the fold); references = canon
+      //   you're *connecting to*. -> { status, verdict, score, message }
       async submitContribution(payload) {
         if (apiMock) {
           return {

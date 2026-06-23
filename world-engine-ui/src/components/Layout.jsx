@@ -56,7 +56,8 @@ export default function Layout() {
           <NavLink to="/codex/characters">Codex</NavLink>
           <NavLink to="/storylines">Storylines</NavLink>
           <NavLink to="/showcase">Showcase</NavLink>
-          <NavLink to="/submit">Add lore</NavLink>
+          {/* Prominent global entry for starting a brand-new root (no seed = new thread). */}
+          <NavLink to="/submit" className="nav-cta">✦ Add lore</NavLink>
         </nav>
         <div className="user">
           {apiMock && <span className="badge" title="No backend configured — showing demo data">demo data</span>}
