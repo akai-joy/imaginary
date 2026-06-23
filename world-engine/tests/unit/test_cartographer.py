@@ -15,7 +15,7 @@
 
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -46,7 +46,7 @@ def _place(store, entry_id, region, x, y):
             body="a place",
             contributor_id="u1",
             map_meta=MapMeta(x=x, y=y, region=region),
-            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
     )
 
@@ -190,7 +190,7 @@ def _run_controller(store, monkeypatch, contrib, cartographer_proposal):
                 "contributor_id": contrib.author_id,
                 "derived_from": [],
                 "version": 1,
-                "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
             },
         },
         "cartographer_proposal": cartographer_proposal,

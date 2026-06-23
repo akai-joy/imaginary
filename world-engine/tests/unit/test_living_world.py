@@ -16,7 +16,7 @@
 import os
 import sqlite3
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -46,7 +46,7 @@ def _canon(entry_id, entry_type, **kw):
         derived_from=kw.get("derived_from", []),
         references=kw.get("references", []),
         map_meta=kw.get("map_meta"),
-        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 
@@ -122,7 +122,7 @@ def test_self_healing_migration_on_legacy_db():
             conn.execute(
                 "INSERT INTO canon_entries VALUES (?,?,?,?,?,?,?,?)",
                 ("canon_old", "lore", "Old", "body", "u1", "[]", 1,
-                 datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat()),
+                 datetime(2026, 1, 1, tzinfo=UTC).isoformat()),
             )
             conn.commit()
 
@@ -172,7 +172,7 @@ def test_controller_honours_explicit_lineage(store, monkeypatch):
                 "contributor_id": "u1",
                 "derived_from": [],  # Provenance proposed nothing; UI lineage must win
                 "version": 1,
-                "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
             },
         }
     }

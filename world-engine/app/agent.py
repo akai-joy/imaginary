@@ -27,8 +27,8 @@ from app.agents.moderation import moderation_node
 from app.agents.narrator import narrator_node
 from app.agents.provenance import provenance_node
 from app.agents.scoring import scoring_node
-from app.core.security import SecurityPlugin
 from app.core.controller import ingest_controller_node
+from app.core.security import SecurityPlugin
 
 # Authenticate with Google Cloud
 if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:

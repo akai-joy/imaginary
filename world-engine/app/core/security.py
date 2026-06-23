@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import html
 import json
 import logging
 import re
@@ -243,24 +242,24 @@ class SecurityPlugin(BasePlugin):
                     # To prevent wrapping trusted system instructions, we look for XML-tagged content.
                     import re
                     tags = ["user_contribution", "canon_entry", "storyboard", "untrusted_content", "storyline", "media_prompt", "untrusted_data"]
-                    
+
                     has_untrusted_data = False
                     for tag in tags:
                         pattern = rf"<{tag}>([\s\S]*?)</{tag}>"
-                        
+
                         # Find all matches of this tag to run screening on them
                         matches = re.findall(pattern, text)
                         for match_content in matches:
                             block_text = match_content.strip()
                             if not block_text:
                                 continue
-                            
+
                             # 3a. Deterministic prompt injection detectors on the untrusted block
                             if detect_deterministic_injection(block_text):
                                 raise ValueError(
                                     "Security Block: Prompt injection attempt detected by deterministic rules in untrusted block."
                                 )
-                            
+
                             # 3b. Gemini Flash-Lite screening on the untrusted block
                             if len(block_text) > 10:
                                 is_inj, reason = await screen_with_flash_lite(
@@ -270,9 +269,9 @@ class SecurityPlugin(BasePlugin):
                                     raise ValueError(
                                         f"Security Block: Gemini Flash-Lite detected prompt injection: {reason}"
                                     )
-                                    
+
                             has_untrusted_data = True
-                        
+
                         # 3c. Wrap the content inside the XML tags with the spotlight delimiters
                         def wrap_match(m):
                             inner_text = m.group(1)
@@ -300,7 +299,7 @@ class SecurityPlugin(BasePlugin):
                                 raise ValueError(
                                     f"Security Block: Gemini Flash-Lite detected prompt injection: {reason}"
                                 )
-                        
+
                         # 3c. Wrap the entire text in spotlight delimiters
                         if not text.startswith("=== START DATA ==="):
                             text = f"=== START DATA ===\n{text}\n=== END DATA ==="

@@ -14,7 +14,7 @@
 
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from app.agents.media import media_node
@@ -42,7 +42,7 @@ def test_assemble_trees():
         contributor_id="u1",
         derived_from=[],
         version=1,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     entry_b = CanonEntry(
         id="canon_b",
@@ -52,7 +52,7 @@ def test_assemble_trees():
         contributor_id="u1",
         derived_from=["canon_a"],
         version=1,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     entry_c = CanonEntry(
         id="canon_c",
@@ -62,7 +62,7 @@ def test_assemble_trees():
         contributor_id="u1",
         derived_from=["canon_b"],
         version=1,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     entry_d = CanonEntry(
         id="canon_d",
@@ -72,7 +72,7 @@ def test_assemble_trees():
         contributor_id="u2",
         derived_from=[],
         version=1,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
     entries = [entry_a, entry_b, entry_c, entry_d]
@@ -110,7 +110,7 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
             contributor_id="u1",
             derived_from=[],
             version=1,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_canon_entry(entry_a)
 
@@ -121,7 +121,7 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
                 author_id="u1",
                 points_delta=80,
                 reason="Scoring A",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
         )
 
@@ -133,7 +133,7 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
                     voter_id=f"user_{i}",
                     tree_id="canon_a",
                     weight=1.0,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
             )
 
@@ -147,7 +147,7 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
             contributor_id="u2",
             derived_from=[],
             version=1,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_canon_entry(entry_b)
 
@@ -157,7 +157,7 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
                 author_id="u2",
                 points_delta=90,
                 reason="Scoring B",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
         )
 
@@ -168,7 +168,7 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
                     voter_id=f"user_{i}",
                     tree_id="canon_b",
                     weight=1.0,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
             )
 
@@ -231,7 +231,7 @@ def test_storyboard_node_success(monkeypatch):
             contributor_id="u1",
             derived_from=[],
             version=1,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_canon_entry(entry_a)
 
@@ -240,7 +240,7 @@ def test_storyboard_node_success(monkeypatch):
             tree_id="canon_a",
             media_type="comic",
             status=ShowcaseJobStatus.QUEUED,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_showcase_job(job)
 
@@ -301,7 +301,7 @@ def test_storyboard_node_blocked(monkeypatch):
             contributor_id="u1",
             derived_from=[],
             version=1,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_canon_entry(entry_a)
 
@@ -310,7 +310,7 @@ def test_storyboard_node_blocked(monkeypatch):
             tree_id="canon_a",
             media_type="comic",
             status=ShowcaseJobStatus.QUEUED,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_showcase_job(job)
 
@@ -362,7 +362,7 @@ def test_media_node_comic(monkeypatch):
             media_type="comic",
             status=ShowcaseJobStatus.DIRECTED,
             storyboard_json='{"title": "Test Title", "logline": "Test Logline", "scenes": [{"scene_number": 1, "visual_description": "A wizard practicing fire magic in Eldoria.", "caption": "Scene 1 caption"}]}',
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_showcase_job(job)
 
@@ -412,7 +412,7 @@ def test_media_node_reel(monkeypatch):
             media_type="reel",
             status=ShowcaseJobStatus.DIRECTED,
             storyboard_json='{"title": "Test Title", "logline": "Test Logline", "scenes": [{"scene_number": 1, "visual_description": "A wizard practicing fire magic in Eldoria.", "caption": "Scene 1 caption"}]}',
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_showcase_job(job)
 
@@ -462,7 +462,7 @@ def test_publish_handoff_node(monkeypatch):
             contributor_id="creator123",
             derived_from=[],
             version=1,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_canon_entry(entry_a)
 
@@ -472,7 +472,7 @@ def test_publish_handoff_node(monkeypatch):
             media_type="comic",
             status=ShowcaseJobStatus.GENERATED,
             storyboard_json='{"title": "Test Title", "logline": "Test Logline", "scenes": [{"scene_number": 1, "visual_description": "Visual desc", "caption": "Caption desc"}]}',
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         test_store.save_showcase_job(job)
 

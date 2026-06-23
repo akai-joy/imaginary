@@ -14,8 +14,6 @@
 
 import logging
 import os
-from datetime import datetime, timezone
-from typing import Any
 
 import yaml
 from google import genai
@@ -26,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import POLICY_PATH
 from app.core.store import get_store
-from app.core.types import ShowcaseJob, ShowcaseJobStatus, Storyboard, StoryboardScene
+from app.core.types import ShowcaseJob, ShowcaseJobStatus, Storyboard
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +95,7 @@ def director_node(ctx: Context, node_input: list[ShowcaseJob]):
         # Build prompt for LLM
         prompt_lines = [
             "You are the Cinematic Director Agent for a collaborative storytelling system.",
-            f"Your task is to take the raw visual descriptions of scenes in the storyboard and rewrite each of them into an optimized cinematic prompt for image generation (Imagen) or video generation (Veo/Luma/Runway).",
+            "Your task is to take the raw visual descriptions of scenes in the storyboard and rewrite each of them into an optimized cinematic prompt for image generation (Imagen) or video generation (Veo/Luma/Runway).",
             f"Media Type: {job.media_type.upper()} (For comic panels, optimize for static images; for reels, optimize for fluid video motions and camera pans).",
             f"Story Title: {storyboard.title}",
             f"Story Logline: {storyboard.logline}",

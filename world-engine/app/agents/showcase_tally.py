@@ -15,7 +15,7 @@
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import yaml
@@ -145,7 +145,7 @@ def showcase_tally_node(ctx: Context, node_input: Any):
             tree_id=tree.tree_id,
             media_type=media_type,
             status=ShowcaseJobStatus.QUEUED,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         new_jobs.append(job)
         logger.info(

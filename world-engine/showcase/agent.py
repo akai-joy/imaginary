@@ -20,13 +20,13 @@ from google.adk.workflow import Edge, Workflow
 from google.adk.workflow._graph import START
 from google.adk.workflow.utils._workflow_graph_utils import build_node
 
+from app.agents.director import director_node
 from app.agents.media import media_node
 from app.agents.publish_handoff import publish_handoff_node
 from app.agents.showcase_tally import showcase_tally_node
 from app.agents.storyboard import storyboard_node
-from app.agents.director import director_node
-from app.core.security import SecurityPlugin
 from app.core.controller import showcase_controller_node
+from app.core.security import SecurityPlugin
 
 # Authenticate with Google Cloud
 if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:

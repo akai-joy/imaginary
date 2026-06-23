@@ -14,7 +14,6 @@
 
 import logging
 import os
-from datetime import datetime
 
 import yaml
 from google import genai
@@ -25,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import POLICY_PATH
 from app.core.store import get_store
-from app.core.types import Contribution, LedgerEntry
+from app.core.types import Contribution
 
 logger = logging.getLogger(__name__)
 
