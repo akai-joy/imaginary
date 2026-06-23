@@ -189,9 +189,47 @@ scoring model that rewards downstream reuse rather than posting volume; a
 security-first multi-agent design where untrusted user content passes through eight
 agents without ever being trusted; and a world that literally draws itself.
 
+## Value, economy & rewards (the vision this is built for)
+
+World Engine is the first floor of a creator-economy platform for collaborative IP, and
+the architecture was chosen with that in mind. The same agent routines that keep the
+world safe and coherent are also what make a *fair* reward system possible — the agents
+are the referee for **value and attribution**, not just safety.
+
+- **Collection & status.** Contributors earn worldbuilding **badges** (first lore in a
+  drop, lore others built on, a storyline that reached the showcase, a season survived).
+  Status is derived entirely from data the system already records — accepted
+  contributions, votes received, and provenance reach.
+- **Outputs worth keeping.** Because the showcase pipeline already turns the best
+  storylines into media, the natural next step is more **render targets** of the same
+  canon: a printable **book / e-book** for a season that scores well, **D&D-style
+  adventure modules**, and **digital backgrounds / art**. The season-finale **book
+  compiler** is the seed of this and already has its read layer (the Canon MCP server's
+  `get_story` / `get_codex`). Digital outputs are **free for contributors to collect**.
+- **Aligned incentives via provenance.** This is the part the agents uniquely enable.
+  Every contribution is **scored and provenance-traced**, so the value of a finished
+  world can be split *fairly and deterministically* among the people who authored it and
+  the people whose ideas others built on — a "proof-of-creativity" payout computed over
+  the existing ledger + provenance graph. Selling physical merch from a great world could
+  then route a share of profit back to contributors, turning "only valuable
+  contributions become canon" into "valuable contributions earn."
+
+**Scope discipline for this capstone:** the economy here is deliberately **points-only
+and simulated** — no cryptocurrency, tokens, wallets, or real payments (see the
+Responsible-AI notes). The reward split is modelled and *shown* (an attribution split
+over the provenance graph), never settled with real money. Real fulfilment, payouts, and
+the KYC/tax/marketplace machinery they require are explicitly future work.
+
 ## Limitations and future work
 
 Scoring quality is bounded by the judging model; continuity search is keyword-based and
-would benefit from vector retrieval at scale. Future work: vector-RAG continuity, a
-season-finale **book compiler** that renders an archived drop into a full anthology
-(the MCP read layer is already built for it), and a reviewed live-publishing path.
+would benefit from vector retrieval at scale. Future work, roughly in order:
+
+1. **Vector-RAG continuity** to scale canon-consistency beyond keyword matching.
+2. **Season-finale book compiler** — render an archived drop into a full anthology
+   (the MCP read layer is already built for it).
+3. **Badges & contributor profiles** — derived from existing contribution/vote/provenance data.
+4. **Merch render targets** — e-book, D&D module, and background/art exports of canon.
+5. **A provenance-weighted reward split** — first simulated (as above), and only later, if
+   ever, a regulated/opt-in real payout path with the necessary compliance layer.
+6. **A reviewed live-publishing path** (today the showcase stops at a mock review gate).
