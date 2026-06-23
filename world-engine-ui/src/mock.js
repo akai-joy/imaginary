@@ -102,7 +102,7 @@ export const mockWorld = {
   art_style_directive:
     'Painterly high-fantasy storybook illustration; candlelit medieval palette; ink-and-watercolor linework.',
   // Populated by the Atlas agent once locations are painted; null in offline demo.
-  map_image_url: null,
+  map_image_url: '/map_background.jpg',
   status: 'active',
   // ~5 days of contribution window left — scarcity is the event energy.
   closes_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 + 14 * 60 * 60 * 1000).toISOString(),

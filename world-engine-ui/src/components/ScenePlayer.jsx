@@ -66,12 +66,14 @@ const I = {
   ),
   prev: <path d="M7 6v12M9 12l9 6V6z" />,
   next: <path d="M17 6v12M15 12L6 6v12z" />,
+  speaker: <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>,
+  speakerMute: <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.21.05-.42.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>,
 };
 
-const Icon = ({ d, stroke }) => (
+const Icon = ({ d, stroke, size = "22" }) => (
   <svg
-    width="22"
-    height="22"
+    width={size}
+    height={size}
     viewBox="0 0 24 24"
     fill={stroke ? "none" : "currentColor"}
     stroke={stroke ? "currentColor" : "none"}
@@ -138,6 +140,9 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
   const [atChoices, setAtChoices] = useState(false);
   const [progress, setProgress] = useState(0);
   const [showCaptions, setShowCaptions] = useState(true);
+  const [voiceoverEnabled, setVoiceoverEnabled] = useState(true);
+  const synthRef = useRef(window.speechSynthesis);
+  const utteranceRef = useRef(null);
   const [mediaDimensions, setMediaDimensions] = useState({
     width: 0,
     height: 0,
@@ -150,6 +155,18 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
   const panels = scene.panels;
   const panel = panels[index];
   const isLast = index === panels.length - 1;
+
+  useEffect(() => {
+    const handleVoices = () => {};
+    if (synthRef.current) {
+      synthRef.current.addEventListener("voiceschanged", handleVoices);
+    }
+    return () => {
+      if (synthRef.current) {
+        synthRef.current.removeEventListener("voiceschanged", handleVoices);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     setIndex(0);
@@ -194,9 +211,14 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
     setIndex((i) => Math.max(0, i - 1));
   }, []);
 
-  // playback driver: audio ▸ video ▸ timer
+  // playback driver: audio ▸ voiceover ▸ video ▸ timer
   useEffect(() => {
-    if (!playing || atChoices) return;
+    if (!playing || atChoices) {
+      if (synthRef.current) {
+        synthRef.current.cancel();
+      }
+      return;
+    }
     const dur = panel.durationMs || 5200;
     const audio = panel.audioUrl ? audioRef.current : null;
     const video = panel.videoUrl ? videoRef.current : null;
@@ -216,6 +238,61 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
         audio.removeEventListener("ended", onEnd);
       };
     }
+
+    if (voiceoverEnabled && panel.caption && synthRef.current) {
+      synthRef.current.cancel();
+      const utterance = new SpeechSynthesisUtterance(panel.caption);
+      
+      const voices = synthRef.current.getVoices();
+      // Prioritize high-quality British Male voices (Daniel, Oliver, or Google UK English Male)
+      const targetVoice = voices.find(v => 
+        (v.lang.startsWith("en-GB") || v.lang.startsWith("en_GB")) && 
+        (v.name.includes("Daniel") || v.name.includes("Oliver") || v.name.includes("Male") || v.name.includes("Google"))
+      ) || voices.find(v => 
+        (v.lang.startsWith("en-GB") || v.lang.startsWith("en_GB"))
+      ) || voices.find(v => 
+        v.lang.startsWith("en") && (v.name.includes("Natural") || v.name.includes("Google"))
+      );
+
+      if (targetVoice) {
+        utterance.voice = targetVoice;
+      }
+      
+      utterance.rate = 1.0;
+      utteranceRef.current = utterance;
+
+      utterance.onstart = () => {
+        if (video) video.play().catch(() => {});
+      };
+
+      utterance.onend = () => {
+        goNext();
+      };
+
+      utterance.onerror = (e) => {
+        if (e.error !== "interrupted") {
+          console.warn("Speech synthesis error", e);
+        }
+      };
+
+      synthRef.current.speak(utterance);
+
+      // Track progress roughly using an interval since SpeechSynthesis doesn't have fine timeupdate
+      const startTime = performance.now();
+      const interval = setInterval(() => {
+        const elapsed = performance.now() - startTime;
+        setProgress(Math.min(0.99, elapsed / dur));
+      }, 100);
+
+      return () => {
+        clearInterval(interval);
+        if (synthRef.current) {
+          synthRef.current.cancel();
+        }
+        if (video) video.pause();
+      };
+    }
+
     if (video) {
       const onTime = () => video.duration && setProgress(video.currentTime / video.duration);
       const onEnd = () => goNext();
@@ -241,7 +318,7 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, index, atChoices, scene.id]);
+  }, [playing, index, atChoices, scene.id, voiceoverEnabled]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -362,6 +439,22 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
           aria-pressed={showCaptions}
         >
           CC
+        </button>
+        <button
+          className={`cc ${voiceoverEnabled ? "on" : ""}`}
+          onClick={() => {
+            setVoiceoverEnabled((v) => {
+              if (v && synthRef.current) {
+                synthRef.current.cancel();
+              }
+              return !v;
+            });
+          }}
+          aria-label={voiceoverEnabled ? "Mute voiceover" : "Unmute voiceover"}
+          title="Toggle Voiceover Narration"
+          style={{ marginLeft: '8px' }}
+        >
+          <Icon d={voiceoverEnabled ? I.speaker : I.speakerMute} size="14" />
         </button>
       </div>
     </div>
