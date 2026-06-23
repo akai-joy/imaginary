@@ -15,7 +15,7 @@
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import yaml
@@ -28,7 +28,13 @@ from google.oauth2 import id_token
 from pydantic import BaseModel, Field
 
 from app.core.config import POLICY_PATH
-from app.core.types import Contribution, ContributionStatus, ContributionType
+from app.core.store import get_store
+from app.core.types import (
+    DEFAULT_WORLD_ID,
+    Contribution,
+    ContributionStatus,
+    ContributionType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +48,15 @@ class IngestInput(BaseModel):
     )
     id_token: str | None = Field(
         default=None, description="Optional Google Auth ID token to verify."
+    )
+    world_id: str | None = Field(
+        default=None, description="Optional world ID to scope the contribution."
+    )
+    derived_from: list[str] = Field(
+        default_factory=list, description="Explicit lineage links/parents chosen in the UI."
+    )
+    references: list[str] = Field(
+        default_factory=list, description="Cast/setting reference links chosen in the UI."
     )
 
 
@@ -106,6 +121,9 @@ def intake_router(ctx: Context, node_input: Any):
     user_text = ""
     author_id = "playground_user"
     id_token_str = None
+    world_id = None
+    derived_from = []
+    references = []
 
     # Resolve input variables from various structures
     if isinstance(node_input, str):
@@ -114,15 +132,26 @@ def intake_router(ctx: Context, node_input: Any):
         user_text = node_input.user_text
         author_id = node_input.author_id
         id_token_str = node_input.id_token
+        world_id = node_input.world_id
+        derived_from = node_input.derived_from
+        references = node_input.references
     elif isinstance(node_input, dict):
         user_text = node_input.get("user_text", "")
         author_id = node_input.get("author_id", "playground_user")
         id_token_str = node_input.get("id_token")
+        world_id = node_input.get("world_id")
+        derived_from = node_input.get("derived_from", [])
+        references = node_input.get("references", [])
     elif hasattr(node_input, "parts"):  # types.Content from client message
         parts = node_input.parts or []
         if parts:
             user_text = parts[0].text or ""
         author_id = "playground_user"
+
+    if derived_from is None:
+        derived_from = []
+    if references is None:
+        references = []
 
     # 1. Authenticate human author
     authenticated_author_id = verify_google_auth(author_id, id_token_str)
@@ -151,15 +180,20 @@ def intake_router(ctx: Context, node_input: Any):
     result = RouterOutput.model_validate_json(response.text)
 
     # 3. Construct normalized Contribution object
+    active_world = get_store().get_active_world()
+    active_world_id = world_id or (active_world.id if active_world else None) or DEFAULT_WORLD_ID
+
     contrib = Contribution(
         id=str(uuid.uuid4()),
         author_id=authenticated_author_id,
+        world_id=active_world_id,
         type=result.contribution_type,
         title=result.title,
         body=result.body,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         status=ContributionStatus.PENDING,
-        references=[],
+        references=references,
+        derived_from=derived_from,
     )
 
     # Yield content event for display in CLI/playground

@@ -15,14 +15,22 @@
 import logging
 import os
 import shutil
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from google.adk.agents.context import Context
 from google.adk.events.event import Event
 
 from app.core.store import get_store
-from app.core.types import CanonEntry, Contribution, LedgerEntry, MapMeta, MediaAsset, ShowcaseJob, ContributionStatus, ShowcaseJobStatus
+from app.core.types import (
+    CanonEntry,
+    Contribution,
+    ContributionStatus,
+    LedgerEntry,
+    MapMeta,
+    MediaAsset,
+    ShowcaseJob,
+    ShowcaseJobStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +69,7 @@ def ingest_controller_node(ctx: Context, node_input: Contribution):
             author_id=contrib.author_id,
             points_delta=points_delta,
             reason=scoring_proposal.get("reason", "Scored by controller"),
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         store.save_ledger_entry(ledger_entry)
         logger.info("Controller saved LedgerEntry with clamped score: %d", points_delta)
@@ -176,7 +184,7 @@ def showcase_controller_node(ctx: Context, node_input: list[ShowcaseJob]):
                 if data.get("storyboard_json"):
                     job.storyboard_json = data.get("storyboard_json")
                 store.save_showcase_job(job)
-                
+
                 # Also copy prompt sheet to gcs_mock if available
                 prompt_sheet_path = data.get("prompt_sheet_path")
                 prompt_sheet_filename = data.get("prompt_sheet_filename")
@@ -192,7 +200,7 @@ def showcase_controller_node(ctx: Context, node_input: list[ShowcaseJob]):
                             logger.info("Controller wrote prompt sheet to GCS: %s", dest_path)
                     except Exception as e:
                         logger.error("Controller failed to copy prompt sheet: %s", e)
-                
+
                 logger.info("Controller updated director status for job: %s", job.id)
 
     # 3. Process media proposal
@@ -217,7 +225,6 @@ def showcase_controller_node(ctx: Context, node_input: list[ShowcaseJob]):
             # Perform GCS writes (copies from cache to gcs_mock)
             src_path = data.get("src_path")
             dest_path = data.get("dest_path")
-            bucket = data.get("bucket")
 
             # CONFINE GCS writes strictly to the job's prefix
             if dest_path:
@@ -267,3 +274,82 @@ def showcase_controller_node(ctx: Context, node_input: list[ShowcaseJob]):
             logger.info("Controller published job: %s", job.id)
 
     yield Event(output=jobs)
+
+
+def cartography_controller_node(ctx: Context, node_input: CanonEntry):
+    """Deterministic Cartography Controller.
+
+    Copies cached tiles and master map canvases to the GCS mock folder, validates paths,
+    saves the map tile MediaAsset, and updates the World model.
+    """
+    store = get_store()
+    entry = node_input
+
+    proposal = ctx.state.get("cartography_proposal")
+    if proposal:
+        world_id = proposal["world_id"]
+        location_id = proposal["location_id"]
+        version = proposal["version"]
+        contributor_ids = proposal["contributor_ids"]
+
+        # Validate and copy tile
+        tile_src = proposal["tile_src_path"]
+        tile_dest = proposal["tile_dest_path"]
+        tile_filename = proposal["tile_filename"]
+
+        if tile_dest:
+            basename = os.path.basename(tile_dest)
+            if not tile_dest.startswith("gcs_mock/world-engine-atlas/"):
+                raise ValueError(f"Security Block: Out-of-prefix GCS write attempt for '{tile_dest}'.")
+            if not basename.startswith(f"maptile_{location_id}_"):
+                raise ValueError(f"Security Block: filename '{basename}' does not match location '{location_id}'.")
+
+            os.makedirs(os.path.dirname(tile_dest), exist_ok=True)
+            if os.path.exists(tile_src):
+                shutil.copy2(tile_src, tile_dest)
+                logger.info("Cartography Controller wrote tile to GCS: %s", tile_dest)
+
+        # Validate and copy canvas
+        canvas_src = proposal["canvas_src_path"]
+        canvas_dest = proposal["canvas_dest_path"]
+        canvas_filename = proposal["canvas_filename"]
+        canvas_version = proposal["canvas_version"]
+
+        if canvas_dest:
+            basename = os.path.basename(canvas_dest)
+            if not canvas_dest.startswith("gcs_mock/world-engine-atlas/"):
+                raise ValueError(f"Security Block: Out-of-prefix GCS write attempt for '{canvas_dest}'.")
+            if not basename.startswith(f"mapcanvas_{world_id}_"):
+                raise ValueError(f"Security Block: filename '{basename}' does not match world '{world_id}'.")
+
+            os.makedirs(os.path.dirname(canvas_dest), exist_ok=True)
+            if os.path.exists(canvas_src):
+                shutil.copy2(canvas_src, canvas_dest)
+                logger.info("Cartography Controller wrote canvas to GCS: %s", canvas_dest)
+
+        # Save tile MediaAsset
+        tile_url = f"http://localhost:8000/gcs_mock/world-engine-atlas/{tile_filename}"
+        asset_id = f"asset_tile_{location_id}_v{version}"
+        asset = MediaAsset(
+            id=asset_id,
+            job_id="",
+            tree_id="",
+            kind="map_tile",
+            gcs_url=tile_url,
+            caption=f"Map tile of {entry.title}. AI-generated.",
+            hashtags=[],
+            contributor_ids=contributor_ids,
+            created_at=datetime.now(UTC),
+            node_id=location_id,
+            world_id=world_id,
+        )
+        store.save_media_asset(asset)
+        logger.info("Cartography Controller saved tile MediaAsset: %s", asset_id)
+
+        # Update World map image and version
+        canvas_url = f"http://localhost:8000/gcs_mock/world-engine-atlas/{canvas_filename}"
+        store.save_world_map_image(world_id, canvas_url, canvas_version)
+        logger.info("Cartography Controller updated world map image: %s (v%d)", canvas_url, canvas_version)
+
+    yield Event(output=entry)
+

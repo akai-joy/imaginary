@@ -27,6 +27,7 @@ media_providers:
   voice_registry:
     _narrator: REPLACE_WITH_VOICE_ID
 models:
+  cartographer: gemini-2.5-flash
   continuity: gemini-2.5-flash
   moderation: gemini-2.5-flash
   narrator: gemini-2.5-flash

@@ -47,6 +47,8 @@ class World(BaseModel):
     # time-boxed — that scarcity is the event energy.
     closes_at: datetime | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    map_image_url: str | None = None
+    map_image_version: int = 1
 
 
 # The single active world the store seeds itself with on first init, so the local
@@ -209,3 +211,5 @@ class MediaAsset(BaseModel):
     hashtags: list[str] = Field(default_factory=list)
     contributor_ids: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    node_id: str = ""
+    world_id: str = ""

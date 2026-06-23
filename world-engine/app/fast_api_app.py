@@ -9,26 +9,32 @@
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
 # limitations under the License.
+import json
 import logging
 import os
-import json
-import uuid
 import threading
-from datetime import datetime, timezone
-from typing import Optional, List
+import uuid
+from datetime import UTC, datetime
 
-from fastapi import FastAPI, Depends, Header, HTTPException, Body
-from pydantic import BaseModel
+from dotenv import load_dotenv
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.staticfiles import StaticFiles
 from google.adk.cli.fast_api import get_fast_api_app
 from google.cloud import logging as google_cloud_logging
+from pydantic import BaseModel
 
+from app.agents.showcase_tally import assemble_trees
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
 from app.core.store import get_store
-from app.core.types import Contribution, ContributionStatus, ContributionType, Vote, MediaAsset
-from app.agents.showcase_tally import assemble_trees
+from app.core.types import (
+    DEFAULT_WORLD_ID,
+    SEED_WORLD,
+    Vote,
+)
+
+load_dotenv()
 
 setup_telemetry()
 try:
@@ -70,14 +76,14 @@ app.description = "API for interacting with the Agent world-engine"
 
 # CORS middleware is automatically managed by get_fast_api_app using the allow_origins parameter
 
-from fastapi.staticfiles import StaticFiles
+
 os.makedirs("gcs_mock", exist_ok=True)
 app.mount("/gcs_mock", StaticFiles(directory="gcs_mock"), name="gcs_mock")
 os.makedirs("cache", exist_ok=True)
 app.mount("/cache", StaticFiles(directory="cache"), name="cache")
 
 
-def get_user_id_from_token(authorization: Optional[str], strict: bool = False) -> str:
+def get_user_id_from_token(authorization: str | None, strict: bool = False) -> str:
     """Helper to extract user identity from Firebase Auth ID token, fallback to local dev user."""
     is_strict_active = (
         os.environ.get("K_SERVICE") is not None
@@ -111,7 +117,7 @@ def get_user_id_from_token(authorization: Optional[str], strict: bool = False) -
         except Exception as e:
             logger.warning("Firebase token verification failed, using fallback: %s", e)
             if strict and is_strict_active:
-                raise HTTPException(status_code=401, detail=f"Firebase token verification failed: {e}")
+                raise HTTPException(status_code=401, detail=f"Firebase token verification failed: {e}") from e
 
     if strict and is_strict_active:
         raise HTTPException(status_code=401, detail="Authentication required (Firebase App ID not configured)")
@@ -120,8 +126,120 @@ def get_user_id_from_token(authorization: Optional[str], strict: bool = False) -
 
 # --- REST API Endpoints for the Front-End ---
 
+def active_world_id() -> str:
+    w = get_store().get_active_world()
+    return w.id if w else DEFAULT_WORLD_ID
+
+
+@app.get("/world/map")
+def get_world_map(authorization: str | None = Header(None)):
+    store = get_store()
+    user_id = get_user_id_from_token(authorization)
+    active_w_id = active_world_id()
+
+    active_w = store.get_active_world()
+    if not active_w:
+        active_w = store.get_world(DEFAULT_WORLD_ID) or SEED_WORLD
+
+    world_info = {
+        "id": active_w.id,
+        "theme": active_w.theme,
+        "opening_line": active_w.opening_line,
+        "art_style_directive": active_w.art_style_directive,
+        "map_image_url": active_w.map_image_url,
+    }
+
+    canon_locations = store.list_canon_entries_by_type("location", active_w_id)
+    discoveries = store.list_discoveries(user_id)
+
+    # Query map tiles and build latest map_tile URL dict
+    all_assets = store.list_media_assets()
+    tile_urls = {}
+    for asset in all_assets:
+        if asset.kind == "map_tile" and asset.world_id == active_w_id:
+            existing = tile_urls.get(asset.node_id)
+            if not existing or asset.created_at > existing.created_at:
+                tile_urls[asset.node_id] = asset
+
+    locations = []
+    for loc in canon_locations:
+        x = loc.map_meta.x if loc.map_meta else 0.0
+        y = loc.map_meta.y if loc.map_meta else 0.0
+        region = loc.map_meta.region if loc.map_meta else ""
+        near = loc.map_meta.near if loc.map_meta else []
+
+        discovered = (loc.id in discoveries) or (loc.contributor_id == user_id)
+
+        tile_asset = tile_urls.get(loc.id)
+        tile_url = tile_asset.gcs_url if tile_asset else None
+
+        locations.append({
+            "id": loc.id,
+            "title": loc.title,
+            "body": loc.body,
+            "region": region,
+            "x": x,
+            "y": y,
+            "near": near,
+            "discovered": discovered,
+            "contributor_id": loc.contributor_id,
+            "tile_url": tile_url,
+        })
+
+    regions = sorted({loc["region"] for loc in locations if loc["region"]})
+
+    return {
+        "world": world_info,
+        "locations": locations,
+        "regions": regions,
+    }
+
+
+@app.get("/codex/{kind}")
+def get_codex(kind: str, authorization: str | None = Header(None)):
+    kind_to_type = {
+        "characters": "character",
+        "beasts": "beast",
+        "spells": "spell",
+    }
+    if kind not in kind_to_type:
+        raise HTTPException(status_code=404, detail="Invalid codex kind")
+
+    entry_type = kind_to_type[kind]
+    store = get_store()
+    user_id = get_user_id_from_token(authorization)
+    active_w_id = active_world_id()
+
+    entries = store.list_canon_entries_by_type(entry_type, active_w_id)
+    discoveries = store.list_discoveries(user_id)
+
+    codex_items = []
+    for entry in entries:
+        discovered = (entry.id in discoveries) or (entry.contributor_id == user_id)
+        codex_items.append({
+            "id": entry.id,
+            "title": entry.title,
+            "body": entry.body,
+            "contributor_id": entry.contributor_id,
+            "discovered": discovered,
+        })
+
+    return codex_items
+
+
+class DiscoverPayload(BaseModel):
+    canon_id: str
+
+
+@app.post("/discover")
+def post_discover(payload: DiscoverPayload, authorization: str | None = Header(None)):
+    user_id = get_user_id_from_token(authorization)
+    store = get_store()
+    store.save_discovery(user_id, payload.canon_id)
+    return {"discovered": True, "canon_id": payload.canon_id}
+
 @app.get("/canon/storylines")
-def list_storylines(authorization: Optional[str] = Header(None)):
+def list_storylines(authorization: str | None = Header(None)):
     """GET /canon/storylines -> StorylineTree[] summaries"""
     store = get_store()
     canon_entries = store.list_canon_entries()
@@ -181,7 +299,7 @@ def list_storylines(authorization: Optional[str] = Header(None)):
 
 
 @app.get("/canon/storylines/{treeId}")
-def get_storyline(treeId: str, authorization: Optional[str] = Header(None)):
+def get_storyline(treeId: str, authorization: str | None = Header(None)):
     """GET /canon/storylines/:treeId -> Detailed StorylineTree with nodes array"""
     store = get_store()
     canon_entries = store.list_canon_entries()
@@ -268,18 +386,19 @@ def is_local_dev() -> bool:
 
 
 def enqueue_showcase_task(tree_id: str):
-    from google.cloud import tasks_v2
     import json
+
+    from google.cloud import tasks_v2
 
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
     location = os.getenv("CLOUD_TASKS_LOCATION", "us-central1")
     queue = os.getenv("CLOUD_TASKS_QUEUE", "showcase-queue")
-    
+
     service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
     if not service_url:
         logger.warning("SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost.")
         service_url = "http://localhost:8000"
-        
+
     target_url = f"{service_url.rstrip('/')}/internal/run-showcase"
 
     client = tasks_v2.CloudTasksClient()
@@ -305,12 +424,140 @@ def enqueue_showcase_task(tree_id: str):
     client.create_task(request={"parent": parent, "task": task})
 
 
+def enqueue_atlas_task(location_id: str):
+    import json
+
+    from google.cloud import tasks_v2
+
+    project = os.getenv("GOOGLE_CLOUD_PROJECT")
+    location = os.getenv("CLOUD_TASKS_LOCATION", "us-central1")
+    queue = os.getenv("CLOUD_TASKS_QUEUE", "showcase-queue")
+
+    service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
+    if not service_url:
+        logger.warning("SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost.")
+        service_url = "http://localhost:8000"
+
+    target_url = f"{service_url.rstrip('/')}/internal/paint-atlas"
+
+    client = tasks_v2.CloudTasksClient()
+    parent = client.queue_path(project, location, queue)
+
+    task = {
+        "http_request": {
+            "http_method": tasks_v2.HttpMethod.POST,
+            "url": target_url,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"location_id": location_id}).encode("utf-8"),
+        }
+    }
+
+    service_account_email = os.getenv("CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL")
+    if service_account_email:
+        task["http_request"]["oidc_token"] = {
+            "service_account_email": service_account_email,
+            "audience": target_url,
+        }
+
+    logger.info("Enqueuing Cloud Tasks target=%s for location_id=%s", target_url, location_id)
+    client.create_task(request={"parent": parent, "task": task})
+
+
+def trigger_atlas_task(location_id: str):
+    if is_local_dev():
+        def run_atlas_async():
+            try:
+                from app.agents.atlas_illustrator import atlas_node
+                from app.core.controller import cartography_controller_node
+
+                store = get_store()
+                entry = store.get_canon_entry(location_id)
+                if not entry:
+                    logger.warning("run_atlas_async: location %s not found in store.", location_id)
+                    return
+
+                class SimpleContext:
+                    def __init__(self):
+                        self.state = {}
+
+                ctx = SimpleContext()
+                list(atlas_node(ctx, entry))
+                list(cartography_controller_node(ctx, entry))
+                logger.info("Background atlas task completed for location: %s", location_id)
+            except Exception as e:
+                logger.error("Failed to run background atlas task: %s", e)
+
+        threading.Thread(target=run_atlas_async, daemon=True).start()
+    else:
+        try:
+            enqueue_atlas_task(location_id)
+        except Exception as e:
+            logger.error("Failed to enqueue atlas task: %s", e)
+
+
+
+# Defined AFTER /canon/storylines and /canon/storylines/{treeId} so the parameterized
+# {id} route does not shadow those more specific paths (FastAPI matches in order).
+@app.get("/canon/{id}")
+def get_canon_detail(id: str, authorization: str | None = Header(None)):
+    store = get_store()
+    user_id = get_user_id_from_token(authorization)
+    entry = store.get_canon_entry(id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Canon entry not found")
+
+    store.save_discovery(user_id, id)
+
+    resolved_references = []
+    if entry.references:
+        for ref_id in entry.references:
+            ref_entry = store.get_canon_entry(ref_id)
+            if ref_entry:
+                resolved_references.append({
+                    "id": ref_entry.id,
+                    "title": ref_entry.title,
+                    "type": ref_entry.type.value if hasattr(ref_entry.type, "value") else ref_entry.type,
+                })
+
+    active_w_id = active_world_id()
+    all_entries = store.list_canon_entries(active_w_id)
+    referenced_by = []
+    for e in all_entries:
+        if e.references and id in e.references:
+            referenced_by.append({
+                "id": e.id,
+                "title": e.title,
+                "type": e.type.value if hasattr(e.type, "value") else e.type,
+              })
+
+    assembled = assemble_trees(all_entries)
+    storylines = []
+    for root_id, member_ids in assembled:
+        if id in member_ids:
+            storylines.append(root_id)
+
+    return {
+        "id": entry.id,
+        "world_id": entry.world_id,
+        "type": entry.type.value if hasattr(entry.type, "value") else entry.type,
+        "title": entry.title,
+        "body": entry.body,
+        "contributor_id": entry.contributor_id,
+        "version": entry.version,
+        "map_meta": entry.map_meta.model_dump() if entry.map_meta else None,
+        "references": resolved_references,
+        "referenced_by": referenced_by,
+        "storylines": storylines,
+        "discovered": True,
+    }
+
+
 class VotePayload(BaseModel):
     tree_id: str
 
 
 @app.post("/vote")
-def post_vote(payload: VotePayload, authorization: Optional[str] = Header(None)):
+def post_vote(payload: VotePayload, authorization: str | None = Header(None)):
     """POST /vote -> Record user vote, check threshold to run showcase pipeline async"""
     store = get_store()
     user_id = get_user_id_from_token(authorization, strict=True)
@@ -331,7 +578,7 @@ def post_vote(payload: VotePayload, authorization: Optional[str] = Header(None))
         voter_id=user_id,
         tree_id=tree_id,
         weight=1.0,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC)
     )
     store.save_vote(new_vote)
 
@@ -339,8 +586,9 @@ def post_vote(payload: VotePayload, authorization: Optional[str] = Header(None))
     vote_total = sum(v.weight for v in all_votes)
 
     # 1. Fetch policy settings
-    from app.core.config import POLICY_PATH
     import yaml
+
+    from app.core.config import POLICY_PATH
     min_votes = 10
     min_composite_score = 70.0
     if os.path.exists(POLICY_PATH):
@@ -379,10 +627,11 @@ def post_vote(payload: VotePayload, authorization: Optional[str] = Header(None))
                 # Run showcase workflow asynchronously in background thread
                 def run_showcase_async():
                     try:
-                        from showcase.agent import app as showcase_app
                         from google.adk.sessions import InMemorySessionService
-                        from app.core.runner_factory import create_runner
                         from google.genai import types
+
+                        from app.core.runner_factory import create_runner
+                        from showcase.agent import app as showcase_app
 
                         session_service = InMemorySessionService()
                         session = session_service.create_session_sync(user_id="system", app_name="showcase")
@@ -426,10 +675,11 @@ def post_internal_run_showcase(payload: RunShowcasePayload):
         return {"ok": True, "message": "Already exists"}
 
     try:
-        from showcase.agent import app as showcase_app
         from google.adk.sessions import InMemorySessionService
-        from app.core.runner_factory import create_runner
         from google.genai import types
+
+        from app.core.runner_factory import create_runner
+        from showcase.agent import app as showcase_app
 
         session_service = InMemorySessionService()
         session = session_service.create_session_sync(user_id="system", app_name="showcase")
@@ -444,7 +694,7 @@ def post_internal_run_showcase(payload: RunShowcasePayload):
         return {"ok": True}
     except Exception as e:
         logger.error("Failed to run showcase workflow in internal handler: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def get_media_urls_for_scene(scene, media_type: str) -> tuple[str | None, str | None]:
@@ -597,12 +847,12 @@ def get_scene(scene_id: str):
             "choices": choices
         }
 
-    from app.core.types import Storyboard, StoryboardScene
+    from app.core.types import Storyboard
 
     # Reconstruct the tree containing this scene to find the ShowcaseJob and storyboard
     canon_entries = store.list_canon_entries()
     assembled = assemble_trees(canon_entries)
-    
+
     # Find the tree containing this entry
     tree_root_id = None
     for root_id, member_ids in assembled:
@@ -658,11 +908,11 @@ def get_scene(scene_id: str):
                 best_entry_id = tree_entries[0].id
                 best_score = -1
                 scene_text = f"{s.visual_description} {s.caption}".lower()
-                scene_words = set(w for w in scene_text.split() if len(w) > 3)
+                scene_words = {w for w in scene_text.split() if len(w) > 3}
 
                 for e in tree_entries:
                     entry_text = f"{e.title} {e.body}".lower()
-                    entry_words = set(w for w in entry_text.split() if len(w) > 3)
+                    entry_words = {w for w in entry_text.split() if len(w) > 3}
                     overlap = len(scene_words.intersection(entry_words))
                     if overlap > best_score:
                         best_score = overlap
@@ -784,17 +1034,21 @@ class ContributePayload(BaseModel):
     title: str
     type: str
     body: str
+    derived_from: list[str] = []
+    references: list[str] = []
+    world_id: str | None = None
 
 
 @app.post("/contribute")
-def post_contribute(payload: ContributePayload, authorization: Optional[str] = Header(None)):
+def post_contribute(payload: ContributePayload, authorization: str | None = Header(None)):
     """POST /contribute -> Execute world_engine_workflow ingest synchronously"""
     user_id = get_user_id_from_token(authorization, strict=True)
 
     from google.adk.sessions import InMemorySessionService
-    from app.core.runner_factory import create_runner
-    from app.agent import app as agent_app
     from google.genai import types
+
+    from app.agent import app as agent_app
+    from app.core.runner_factory import create_runner
 
     session_service = InMemorySessionService()
     session = session_service.create_session_sync(user_id=user_id, app_name="app")
@@ -804,7 +1058,10 @@ def post_contribute(payload: ContributePayload, authorization: Optional[str] = H
     input_data = {
         "user_text": f"Type: {payload.type}. Title: {payload.title}. Body: {payload.body}",
         "author_id": user_id,
-        "id_token": authorization.replace("Bearer ", "") if authorization else None
+        "id_token": authorization.replace("Bearer ", "") if authorization else None,
+        "world_id": payload.world_id,
+        "derived_from": payload.derived_from,
+        "references": payload.references
     }
 
     message = types.Content(
@@ -852,6 +1109,12 @@ def post_contribute(payload: ContributePayload, authorization: Optional[str] = H
             narrator_proposal = state.get("narrator_proposal", {})
             if narrator_proposal:
                 status = narrator_proposal.get("contrib_status", "accepted")
+                new_entry = narrator_proposal.get("new_entry")
+                if status == "accepted" and new_entry and new_entry.get("type") == "location":
+                    try:
+                        trigger_atlas_task(new_entry["id"])
+                    except Exception as e:
+                        logger.error("Failed to trigger atlas task: %s", e)
 
         return {
             "status": status,
@@ -884,6 +1147,35 @@ def post_contribute(payload: ContributePayload, authorization: Optional[str] = H
                 "score": 0,
                 "message": f"Execution failed: {err_msg}"
             }
+
+
+
+class PaintAtlasPayload(BaseModel):
+    location_id: str
+
+
+@app.post("/internal/paint-atlas")
+def post_internal_paint_atlas(payload: PaintAtlasPayload):
+    store = get_store()
+    entry = store.get_canon_entry(payload.location_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Location canon entry not found")
+
+    try:
+        from app.agents.atlas_illustrator import atlas_node
+        from app.core.controller import cartography_controller_node
+
+        class SimpleContext:
+            def __init__(self):
+                self.state = {}
+
+        ctx = SimpleContext()
+        list(atlas_node(ctx, entry))
+        list(cartography_controller_node(ctx, entry))
+        return {"ok": True, "location_id": payload.location_id}
+    except Exception as e:
+        logger.error("Failed to run paint-atlas task in internal handler: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/feedback")

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+
 import yaml
 
 # Default models
@@ -28,17 +29,17 @@ if os.path.exists(ORIGINAL_POLICY_PATH):
     try:
         with open(ORIGINAL_POLICY_PATH) as f:
             config = yaml.safe_load(f) or {}
-        
+
         # Intercept models section and map to gemini-2.5-flash
         if "models" in config:
             for k, v in config["models"].items():
-                if v in ["gemini-flash", "gemini-pro", "gemini-flash-lite", "gemini-3.5-flash", "gemini-2.5-pro"]:
+                if v in ["gemini-flash", "gemini-pro", "gemini-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"]:
                     config["models"][k] = "gemini-2.5-flash"
-        
+
         resolved_path = ORIGINAL_POLICY_PATH.replace(".yaml", "_resolved.yaml")
         with open(resolved_path, "w") as f:
             yaml.dump(config, f)
-        
+
         POLICY_PATH = resolved_path
     except Exception as e:
         import sys

@@ -54,6 +54,9 @@ AGENT_TOOL_ALLOWLIST = {
         "list_canon_entries_by_type",
         "get_canon_entry",
     ],
+    # Atlas illustrator reads the store directly and calls no ADK tools (image gen is a
+    # direct SDK call, not a tool); registered for least-privilege completeness.
+    "atlas": [],
     "showcase_tally": [
         "list_canon_entries",
         "get_canon_entry",

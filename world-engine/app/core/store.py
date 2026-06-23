@@ -16,7 +16,7 @@ import json
 import re
 import sqlite3
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.types import (
     DEFAULT_WORLD_ID,
@@ -54,6 +54,11 @@ class CanonStore(ABC):
     @abstractmethod
     def get_active_world(self) -> World | None:
         """Return the current active world (most recently opened), or None."""
+        pass
+
+    @abstractmethod
+    def save_world_map_image(self, world_id: str, url: str, version: int) -> None:
+        """Update a world's master map image URL and version."""
         pass
 
     @abstractmethod
@@ -177,7 +182,9 @@ class SQLiteCanonStore(CanonStore):
                     status TEXT NOT NULL,
                     opens_at TEXT NOT NULL,
                     closes_at TEXT,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    map_image_url TEXT,
+                    map_image_version INTEGER DEFAULT 1
                 )
             """)
             # Contributions table
@@ -231,6 +238,13 @@ class SQLiteCanonStore(CanonStore):
             _add_missing_columns(
                 "contributions",
                 {"world_id": "world_id TEXT NOT NULL DEFAULT 'world_genesis'"},
+            )
+            _add_missing_columns(
+                "worlds",
+                {
+                    "map_image_url": "map_image_url TEXT",
+                    "map_image_version": "map_image_version INTEGER DEFAULT 1",
+                },
             )
             # Per-user discovery (fog-of-war) table
             cursor.execute("""
@@ -297,9 +311,19 @@ class SQLiteCanonStore(CanonStore):
                     caption TEXT NOT NULL,
                     hashtags_json TEXT NOT NULL,
                     contributor_ids_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    node_id TEXT NOT NULL DEFAULT '',
+                    world_id TEXT NOT NULL DEFAULT ''
                 )
             """)
+
+            _add_missing_columns(
+                "media_assets",
+                {
+                    "node_id": "node_id TEXT NOT NULL DEFAULT ''",
+                    "world_id": "world_id TEXT NOT NULL DEFAULT ''",
+                },
+            )
 
             # Seed the first active world if none exists yet, so the playground and tests
             # always have a world to scope against. We never re-seed once any world exists
@@ -311,8 +335,8 @@ class SQLiteCanonStore(CanonStore):
                     """
                     INSERT INTO worlds (
                         id, theme, opening_line, art_style_directive, moderation_profile,
-                        status, opens_at, closes_at, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        status, opens_at, closes_at, created_at, map_image_url, map_image_version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         w.id,
@@ -324,6 +348,8 @@ class SQLiteCanonStore(CanonStore):
                         w.opens_at.isoformat(),
                         w.closes_at.isoformat() if w.closes_at else None,
                         w.created_at.isoformat(),
+                        w.map_image_url,
+                        w.map_image_version,
                     ),
                 )
 
@@ -331,7 +357,7 @@ class SQLiteCanonStore(CanonStore):
 
     _WORLD_COLS = (
         "id, theme, opening_line, art_style_directive, moderation_profile, "
-        "status, opens_at, closes_at, created_at"
+        "status, opens_at, closes_at, created_at, map_image_url, map_image_version"
     )
 
     @staticmethod
@@ -346,6 +372,8 @@ class SQLiteCanonStore(CanonStore):
             opens_at=datetime.fromisoformat(row[6]),
             closes_at=datetime.fromisoformat(row[7]) if row[7] else None,
             created_at=datetime.fromisoformat(row[8]),
+            map_image_url=row[9] if len(row) > 9 else None,
+            map_image_version=row[10] if len(row) > 10 else 1,
         )
 
     def save_world(self, world: World) -> None:
@@ -354,8 +382,8 @@ class SQLiteCanonStore(CanonStore):
                 """
                 INSERT OR REPLACE INTO worlds (
                     id, theme, opening_line, art_style_directive, moderation_profile,
-                    status, opens_at, closes_at, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    status, opens_at, closes_at, created_at, map_image_url, map_image_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     world.id,
@@ -367,7 +395,17 @@ class SQLiteCanonStore(CanonStore):
                     world.opens_at.isoformat(),
                     world.closes_at.isoformat() if world.closes_at else None,
                     world.created_at.isoformat(),
+                    world.map_image_url,
+                    world.map_image_version,
                 ),
+            )
+            conn.commit()
+
+    def save_world_map_image(self, world_id: str, url: str, version: int) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE worlds SET map_image_url = ?, map_image_version = ? WHERE id = ?",
+                (url, version, world_id),
             )
             conn.commit()
 
@@ -609,7 +647,7 @@ class SQLiteCanonStore(CanonStore):
                 INSERT OR REPLACE INTO discoveries (user_id, canon_id, created_at)
                 VALUES (?, ?, ?)
             """,
-                (user_id, canon_id, datetime.now(timezone.utc).isoformat()),
+                (user_id, canon_id, datetime.now(UTC).isoformat()),
             )
             conn.commit()
 
@@ -751,8 +789,8 @@ class SQLiteCanonStore(CanonStore):
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO media_assets (
-                    id, job_id, tree_id, kind, gcs_url, caption, hashtags_json, contributor_ids_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, job_id, tree_id, kind, gcs_url, caption, hashtags_json, contributor_ids_json, created_at, node_id, world_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     asset.id,
@@ -764,6 +802,8 @@ class SQLiteCanonStore(CanonStore):
                     json.dumps(asset.hashtags),
                     json.dumps(asset.contributor_ids),
                     asset.created_at.isoformat(),
+                    asset.node_id,
+                    asset.world_id,
                 ),
             )
             conn.commit()
@@ -773,7 +813,7 @@ class SQLiteCanonStore(CanonStore):
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, job_id, tree_id, kind, gcs_url, caption, hashtags_json, contributor_ids_json, created_at
+                SELECT id, job_id, tree_id, kind, gcs_url, caption, hashtags_json, contributor_ids_json, created_at, node_id, world_id
                 FROM media_assets
             """
             )
@@ -789,6 +829,8 @@ class SQLiteCanonStore(CanonStore):
                     hashtags=json.loads(row[6]),
                     contributor_ids=json.loads(row[7]),
                     created_at=datetime.fromisoformat(row[8]),
+                    node_id=row[9] if len(row) > 9 else "",
+                    world_id=row[10] if len(row) > 10 else "",
                 )
                 for row in rows
             ]
@@ -821,6 +863,8 @@ class FirestoreCanonStore(CanonStore):
             opens_at=datetime.fromisoformat(d["opens_at"]),
             closes_at=datetime.fromisoformat(d["closes_at"]) if d.get("closes_at") else None,
             created_at=datetime.fromisoformat(d["created_at"]),
+            map_image_url=d.get("map_image_url"),
+            map_image_version=d.get("map_image_version", 1),
         )
 
     def save_world(self, world: World) -> None:
@@ -834,8 +878,16 @@ class FirestoreCanonStore(CanonStore):
             "opens_at": world.opens_at.isoformat(),
             "closes_at": world.closes_at.isoformat() if world.closes_at else None,
             "created_at": world.created_at.isoformat(),
+            "map_image_url": world.map_image_url,
+            "map_image_version": world.map_image_version,
         }
         self.client.collection("worlds").document(world.id).set(data)
+
+    def save_world_map_image(self, world_id: str, url: str, version: int) -> None:
+        self.client.collection("worlds").document(world_id).update({
+            "map_image_url": url,
+            "map_image_version": version,
+        })
 
     def get_world(self, world_id: str) -> World | None:
         doc = self.client.collection("worlds").document(world_id).get()
@@ -967,7 +1019,7 @@ class FirestoreCanonStore(CanonStore):
         data = {
             "user_id": user_id,
             "canon_id": canon_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         self.client.collection("discoveries").document(f"{user_id}__{canon_id}").set(data)
 
@@ -1095,6 +1147,8 @@ class FirestoreCanonStore(CanonStore):
             "hashtags": asset.hashtags,
             "contributor_ids": asset.contributor_ids,
             "created_at": asset.created_at.isoformat(),
+            "node_id": asset.node_id,
+            "world_id": asset.world_id,
         }
         self.client.collection("media_assets").document(asset.id).set(data)
 
@@ -1114,18 +1168,25 @@ class FirestoreCanonStore(CanonStore):
                     hashtags=d.get("hashtags", []),
                     contributor_ids=d.get("contributor_ids", []),
                     created_at=datetime.fromisoformat(d["created_at"]),
+                    node_id=d.get("node_id", ""),
+                    world_id=d.get("world_id", ""),
                 )
             )
         return results
 
 
 def get_store() -> CanonStore:
-    """Returns either a Firestore or SQLite CanonStore depending on the environment."""
+    """Returns either a Firestore or SQLite CanonStore depending on the environment.
+
+    Firestore is used in the cloud (``K_SERVICE`` set on Cloud Run) or when explicitly
+    requested (``USE_FIRESTORE=True``). Using Vertex AI for the LLM
+    (``GOOGLE_GENAI_USE_VERTEXAI=True``) does NOT force Firestore, so local dev can run
+    Vertex models against the local SQLite ``world.db``.
+    """
     import os
 
     if (
-        os.environ.get("GOOGLE_GENAI_USE_VERTEXAI") == "True"
-        or os.environ.get("USE_FIRESTORE") == "True"
+        os.environ.get("USE_FIRESTORE") == "True"
         or os.environ.get("K_SERVICE") is not None
     ):
         return FirestoreCanonStore()
