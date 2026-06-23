@@ -117,7 +117,9 @@ def redact_pii(text: str) -> str:
 
 
 INJECTION_PATTERNS = [
-    r"(?i)ignore previous instructions",
+    r"(?i)ignore (?:all |any |the )?(?:previous|prior|above|preceding) (?:instructions|directives|rules|prompts)",
+    r"(?i)disregard (?:all |any |the )?(?:previous|prior|above|preceding) (?:instructions|directives|rules|prompts)",
+    r"(?i)(?:reveal|print|repeat|show|output|expose) (?:your |the |me your )?(?:system )?(?:prompt|instructions|directives)",
     r"(?i)you are now (?:acting as|required to|instructed to|programmed to|a helpful assistant|a chatbot)",
     r"(?i)system override",
     r"(?i)developer mode",

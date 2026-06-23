@@ -158,11 +158,14 @@ def scan_prompt_injection(text: str) -> ModerationResponse | None:
     from app.core.security import INJECTION_PATTERNS
     for pattern in INJECTION_PATTERNS:
         if re.search(pattern, text):
-            stripped = re.sub(pattern, "[STRIPPED INJECTION]", text)
+            stripped = re.sub(pattern, "[removed]", text)
             return ModerationResponse(
                 verdict=ModerationVerdict.BLOCK,
                 category="prompt_injection",
-                reason=f"Detected and blocked prompt injection: '{pattern}'. Stripped text: '{stripped}'",
+                reason=(
+                    "A prompt-injection attempt was detected and neutralized before "
+                    f"it reached the model. Sanitized text: “{stripped}”"
+                ),
             )
     return None
 
@@ -197,6 +200,12 @@ def moderation_node(ctx: Context, node_input: Contribution):
             "Halted on BLOCK (deterministic hidden content): %s", hidden_check.reason
         )
         contrib.status = ContributionStatus.BLOCKED
+        # Structured block result so the REST layer can surface verdict + category +
+        # reason to the UI (the BLOCK route halts the graph before any controller runs).
+        ctx.state["moderation_block"] = {
+            "category": hidden_check.category,
+            "reason": hidden_check.reason,
+        }
         yield Event(
             content=types.Content(
                 role="model",
@@ -214,6 +223,10 @@ def moderation_node(ctx: Context, node_input: Contribution):
             injection_check.reason,
         )
         contrib.status = ContributionStatus.BLOCKED
+        ctx.state["moderation_block"] = {
+            "category": injection_check.category,
+            "reason": injection_check.reason,
+        }
         yield Event(
             content=types.Content(
                 role="model",
@@ -269,6 +282,10 @@ Original Raw Input: {raw_text}
             verdict_data.reason,
         )
         contrib.status = ContributionStatus.BLOCKED
+        ctx.state["moderation_block"] = {
+            "category": verdict_data.category,
+            "reason": verdict_data.reason,
+        }
     elif verdict_data.verdict == ModerationVerdict.FLAG:
         logger.info(
             "Marked for review (FLAG): Category=%s, Reason=%s",

@@ -313,6 +313,22 @@ button { font-family: inherit; cursor: pointer; }
 .verdict-score { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
 .verdict-msg { margin: 6px 0 0; color: var(--ink-soft); }
 
+/* The security moment — a deliberately prominent "the referee caught it" state. */
+.verdict-guardian {
+  border: 1px solid #9a2b2b;
+  border-left: 3px solid #9a2b2b;
+  background: linear-gradient(180deg, color-mix(in srgb, #9a2b2b 14%, var(--surface)), var(--surface));
+}
+.guardian-head { margin: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.guardian-head strong { font-family: var(--display); font-size: 17px; letter-spacing: 0.02em; color: var(--ink); }
+.guardian-shield { font-size: 18px; filter: drop-shadow(0 0 6px color-mix(in srgb, #e3859a 60%, transparent)); }
+.guardian-cat {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #e3859a; border: 1px solid color-mix(in srgb, #e3859a 45%, transparent);
+  border-radius: 999px; padding: 2px 9px;
+}
+.guardian-note { margin: 8px 0 0; font-size: 12px; color: var(--ink-soft); font-style: italic; }
+
 /* ---------- States ---------- */
 .state { padding: 40px 0; text-align: center; color: var(--ink-soft); display: flex; flex-direction: column; gap: 14px; align-items: center; }
 .state-error { color: #9a2b2b; }
@@ -635,6 +651,26 @@ button { font-family: inherit; cursor: pointer; }
 .we-skip { display: block; margin: 22px auto 0; background: none; border: none; color: var(--ink-soft);
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; }
 .we-skip:hover { color: var(--ink); }
+.we-mute {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 70;
+}
+.we-mute:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+}
 
 /* ---------- World banner (under the topbar) ---------- */
 .world-banner {

@@ -39,10 +39,13 @@ load_dotenv()
 setup_telemetry()
 try:
     logging_client = google_cloud_logging.Client()
-    logger = logging_client.logger(__name__)
+    logging_client.setup_logging()
+    gcp_logger = logging_client.logger(__name__)
+    logger = logging.getLogger(__name__)
     is_cloud_logging = True
 except Exception:
     logger = logging.getLogger(__name__)
+    gcp_logger = None
     is_cloud_logging = False
 
 env_origins = os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else []
@@ -1078,7 +1081,11 @@ def get_scene(scene_id: str):
 
     if matched_scenes:
         for idx, s in enumerate(matched_scenes):
-            image_url, video_url = get_media_urls_for_scene(s, job.media_type)
+            if tree_root_id == "canon_eldoria":
+                image_url = f"/eldoria_p{s.scene_number}.png"
+                video_url = None
+            else:
+                image_url, video_url = get_media_urls_for_scene(s, job.media_type)
             panels.append({
                 "id": f"{scene_id}_p_{idx}",
                 "prompt": s.visual_description,
@@ -1249,6 +1256,19 @@ def post_contribute(payload: ContributePayload, authorization: str | None = Head
         session_obj = session_service.get_session_sync(user_id=user_id, session_id=session.id, app_name="app")
         state = session_obj.state if session_obj else {}
 
+        # Moderation halts the graph via the BLOCK route (no error_message), so detect
+        # it from the structured result the node writes — this is what surfaces the
+        # "blocked by the Guardian" verdict (category + reason) to the UI.
+        moderation_block = state.get("moderation_block")
+        if moderation_block:
+            return {
+                "status": "blocked",
+                "verdict": "BLOCK",
+                "category": moderation_block.get("category", "policy"),
+                "score": 0,
+                "message": moderation_block.get("reason", "Blocked by moderation."),
+            }
+
         verdict = "ALLOW"
         status = "accepted"
         score = 0
@@ -1350,8 +1370,8 @@ def post_internal_paint_atlas(payload: PaintAtlasPayload):
 @app.post("/feedback")
 def collect_feedback(feedback: Feedback) -> dict[str, str]:
     """Collect and log feedback."""
-    if is_cloud_logging:
-        logger.log_struct(feedback.model_dump(), severity="INFO")
+    if is_cloud_logging and gcp_logger:
+        gcp_logger.log_struct(feedback.model_dump(), severity="INFO")
     else:
         logger.info("Feedback: %s", feedback.model_dump())
     return {"status": "success"}

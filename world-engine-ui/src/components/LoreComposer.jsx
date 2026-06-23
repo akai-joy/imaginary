@@ -1,6 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useApi } from '../api'
 
+// Human-readable labels for the moderation categories the backend returns, so a block
+// reads as a clear "what the referee caught" rather than a raw policy slug.
+const CATEGORY_LABELS = {
+  prompt_injection: 'Prompt injection',
+  hidden_content: 'Hidden payload',
+  explicit_sexual: 'Explicit content',
+  gore_extreme_violence: 'Extreme violence',
+  hate_harassment: 'Hate / harassment',
+  minor_sexualization: 'Disallowed content',
+  illegal_synthesis_instructions: 'Illegal instructions',
+  threats_doxxing_real_people: 'Threats / doxxing',
+}
+const categoryLabel = (c) => CATEGORY_LABELS[c] || 'Policy violation'
+
 // value -> friendly label. Beast (Bestiary) and Spell (Grimoire) belong here too —
 // the Codex browses them and the backend ContributionType supports them.
 export const TYPES = [
@@ -152,7 +166,18 @@ export default function LoreComposer({
 
       {error && <p className="state state-error">{error}</p>}
 
-      {result && (
+      {result && (result.verdict === 'BLOCK' || result.status === 'blocked' ? (
+        // The security moment: the agent referee caught and stopped an attack/violation.
+        <div className="verdict verdict-guardian">
+          <p className="guardian-head">
+            <span className="guardian-shield" aria-hidden="true">🛡</span>
+            <strong>Blocked by the Guardian</strong>
+            <span className="guardian-cat">{categoryLabel(result.category)}</span>
+          </p>
+          {result.message && <p className="verdict-msg">{result.message}</p>}
+          <p className="guardian-note">Caught before it ever reached the model — nothing was written to canon.</p>
+        </div>
+      ) : (
         <div className={`verdict verdict-${(result.verdict || result.status || '').toLowerCase()}`}>
           <p className="verdict-line">
             <strong>{result.verdict || result.status}</strong>
@@ -160,7 +185,7 @@ export default function LoreComposer({
           </p>
           {result.message && <p className="verdict-msg">{result.message}</p>}
         </div>
-      )}
+      ))}
     </>
   )
 }
