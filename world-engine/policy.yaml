@@ -113,6 +113,13 @@ media_providers:
     max_video_panels_per_scene: 2
 
 # ---------------------------------------------------------------------------
+# Season / drop lifecycle (the time-boxed contribution window)
+# ---------------------------------------------------------------------------
+season:
+  drop_days: 14          # default contribution-window length for a new drop
+  auto_rollover: false   # opening the next drop on close stays manual for now
+
+# ---------------------------------------------------------------------------
 # Security guardrail Plugin (registered once on the Runner)
 # ---------------------------------------------------------------------------
 security:

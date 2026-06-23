@@ -35,6 +35,16 @@ export default function LoreComposer({
   onSuccess,
 }) {
   const api = useApi()
+  const [world, setWorld] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    api.getWorld().then((w) => alive && setWorld(w)).catch(() => {})
+    return () => { alive = false }
+  }, [api])
+
+  const isClosed = world?.window_open === false || world?.status === 'archived'
+
   const seedId = continueId || referenceId
   const mode = continueId ? 'continue' : referenceId ? 'reference' : null
 
@@ -67,6 +77,10 @@ export default function LoreComposer({
 
   async function onSubmit(e) {
     e.preventDefault()
+    if (isClosed) {
+      setError("This world has closed — it's now an archived collectible.")
+      return
+    }
     if (!title.trim() || !body.trim() || busy) return
     setBusy(true)
     setError(null)
@@ -131,8 +145,8 @@ export default function LoreComposer({
           <span className="count">{body.length}/4000</span>
         </label>
 
-        <button className="btn-primary" type="submit" disabled={!title.trim() || !body.trim() || busy}>
-          {busy ? 'Sending through the pipeline…' : mode === 'continue' ? 'Add to the story' : 'Submit to canon'}
+        <button className="btn-primary" type="submit" disabled={!title.trim() || !body.trim() || busy || isClosed}>
+          {isClosed ? 'This world is sealed' : busy ? 'Sending through the pipeline…' : mode === 'continue' ? 'Add to the story' : 'Submit to canon'}
         </button>
       </form>
 

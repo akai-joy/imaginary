@@ -44,3 +44,14 @@ if os.path.exists(ORIGINAL_POLICY_PATH):
     except Exception as e:
         import sys
         print(f"Failed to pre-resolve policy configuration: {e}", file=sys.stderr)
+
+
+def load_policy_config() -> dict:
+    """Loads configuration policies from the resolved policy.yaml."""
+    if os.path.exists(POLICY_PATH):
+        try:
+            with open(POLICY_PATH) as f:
+                return yaml.safe_load(f) or {}
+        except Exception:
+            pass
+    return {}

@@ -46,13 +46,13 @@ except Exception:
     is_cloud_logging = False
 
 env_origins = os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else []
-allow_origins = list(set([
+allow_origins = list({
     "http://localhost:5173", "http://127.0.0.1:5173",
     "http://localhost:5174", "http://127.0.0.1:5174",
     "http://localhost:5175", "http://127.0.0.1:5175",
     "http://localhost:5176", "http://127.0.0.1:5176",
     *env_origins
-]))
+})
 
 # Artifact bucket for ADK (created by Terraform, passed via env var)
 logs_bucket_name = os.environ.get("LOGS_BUCKET_NAME")
@@ -127,8 +127,16 @@ def get_user_id_from_token(authorization: str | None, strict: bool = False) -> s
 # --- REST API Endpoints for the Front-End ---
 
 def active_world_id() -> str:
-    w = get_store().get_active_world()
-    return w.id if w else DEFAULT_WORLD_ID
+    from app.core.lifecycle import tick
+    store = get_store()
+    w = tick(store)
+    if w:
+        return w.id
+    # Fallback to the most recently opened world (newest first)
+    worlds = store.list_worlds()
+    if worlds:
+        return worlds[0].id
+    return DEFAULT_WORLD_ID
 
 
 @app.get("/world/map")
@@ -137,7 +145,7 @@ def get_world_map(authorization: str | None = Header(None)):
     user_id = get_user_id_from_token(authorization)
     active_w_id = active_world_id()
 
-    active_w = store.get_active_world()
+    active_w = store.get_world(active_w_id)
     if not active_w:
         active_w = store.get_world(DEFAULT_WORLD_ID) or SEED_WORLD
 
@@ -192,6 +200,29 @@ def get_world_map(authorization: str | None = Header(None)):
         "world": world_info,
         "locations": locations,
         "regions": regions,
+    }
+
+
+@app.get("/world")
+def get_world(authorization: str | None = Header(None)):
+    store = get_store()
+    from app.core.lifecycle import is_window_open, seconds_remaining, tick
+    tick(store)
+    active_w_id = active_world_id()
+    active_w = store.get_world(active_w_id)
+    if not active_w:
+        active_w = store.get_world(DEFAULT_WORLD_ID) or SEED_WORLD
+
+    return {
+        "world_id": active_w.id,
+        "theme": active_w.theme,
+        "opening_line": active_w.opening_line,
+        "art_style": active_w.art_style_directive,
+        "status": active_w.status.value if hasattr(active_w.status, "value") else active_w.status,
+        "opens_at": active_w.opens_at.isoformat() if active_w.opens_at else None,
+        "closes_at": active_w.closes_at.isoformat() if active_w.closes_at else None,
+        "time_remaining_seconds": seconds_remaining(active_w),
+        "window_open": is_window_open(active_w),
     }
 
 
@@ -669,6 +700,9 @@ class RunShowcasePayload(BaseModel):
 def post_internal_run_showcase(payload: RunShowcasePayload):
     """Internal endpoint called to execute the showcase workflow for a tree."""
     store = get_store()
+    from app.core.lifecycle import tick
+    tick(store)
+
     existing_jobs = store.list_showcase_jobs()
     if any(job.tree_id == payload.tree_id for job in existing_jobs):
         logger.info("Showcase job already exists for tree %s, skipping.", payload.tree_id)
@@ -695,6 +729,57 @@ def post_internal_run_showcase(payload: RunShowcasePayload):
     except Exception as e:
         logger.error("Failed to run showcase workflow in internal handler: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+class ScheduleWorldPayload(BaseModel):
+    world_id: str | None = None
+    opens_at: datetime | None = None
+    closes_at: datetime | None = None
+
+
+@app.post("/internal/world/schedule")
+def post_internal_world_schedule(payload: ScheduleWorldPayload, authorization: str | None = Header(None)):
+    _user_id = get_user_id_from_token(authorization)
+    store = get_store()
+
+    target_id = payload.world_id
+    if not target_id:
+        target_id = active_world_id()
+
+    opens_at = payload.opens_at
+    if opens_at and opens_at.tzinfo is None:
+        opens_at = opens_at.replace(tzinfo=UTC)
+
+    closes_at = payload.closes_at
+    if closes_at and closes_at.tzinfo is None:
+        closes_at = closes_at.replace(tzinfo=UTC)
+
+    from app.core.lifecycle import schedule_world
+    w = schedule_world(store, target_id, opens_at=opens_at, closes_at=closes_at)
+    if not w:
+        raise HTTPException(status_code=404, detail=f"World {target_id} not found")
+
+    return {
+        "world_id": w.id,
+        "theme": w.theme,
+        "opens_at": w.opens_at.isoformat() if w.opens_at else None,
+        "closes_at": w.closes_at.isoformat() if w.closes_at else None,
+        "status": w.status.value if hasattr(w.status, "value") else w.status,
+    }
+
+
+@app.post("/internal/tick")
+def post_internal_tick(authorization: str | None = Header(None)):
+    store = get_store()
+    from app.core.lifecycle import tick
+    w = tick(store)
+    return {
+        "active_world": {
+            "world_id": w.id,
+            "status": w.status.value if hasattr(w.status, "value") else w.status,
+            "closes_at": w.closes_at.isoformat() if w.closes_at else None,
+        } if w else None
+    }
 
 
 def get_media_urls_for_scene(scene, media_type: str) -> tuple[str | None, str | None]:
@@ -728,7 +813,7 @@ def get_scene(scene_id: str):
     if not entry:
         raise HTTPException(status_code=404, detail="Scene/Canon entry not found")
 
-    if scene_id in ("canon_alistair", "canon_10254e4f-2552-4528-aa24-5fb891f200a8", "canon_10072aa0-ccd9-4bca-875b-9399a501efc2"):
+    if scene_id in ("canon_alistair", "canon_10254e4f-2552-4528-aa24-5fb891f200a8", "canon_10072aa0-ccd9-4bca-875b-9399a501efc2", "canon_86cfa3fe-c56d-4fda-a066-469d40eb7cf0", "canon_eldoria", "eldoria"):
         # Custom override for the Alistair / Elynar storyline matching the custom video assets
         choices = []
         canon_entries = store.list_canon_entries()
@@ -813,6 +898,75 @@ def get_scene(scene_id: str):
                     "caption": "He tells the crows to deliver a message.",
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/regenerate_this_one_the_wizar.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                }
+            ]
+        elif scene_id in ("canon_eldoria", "eldoria"): # Sliced 6-panel Eldoria Storyline
+            panels = [
+                {
+                    "id": "p1",
+                    "imageUrl": "/eldoria_p1.png",
+                    "videoUrl": None,
+                    "audioUrl": None,
+                    "caption": "At the edge of the white pass, the traveler saw it at last — Eldoria, glowing gold against the dark.",
+                    "prompt": "Wide shot. A weary traveler on a snow-covered mountain path; the golden lights of Eldoria nestle among snowy peaks. Dusk, deep blues and purples.",
+                    "durationMs": 5200
+                },
+                {
+                    "id": "p2",
+                    "imageUrl": "/eldoria_p2.png",
+                    "videoUrl": None,
+                    "audioUrl": None,
+                    "caption": "The village lay cupped in the valley, steam rising from the springs like breath on the cold air.",
+                    "prompt": "High-angle establishing shot. Eldoria in a snowy valley, rustic cabins, warm windows, thick steam from mineral hot springs. Starry sky.",
+                    "durationMs": 5200
+                },
+                {
+                    "id": "p3",
+                    "imageUrl": "/eldoria_p3.png",
+                    "videoUrl": None,
+                    "audioUrl": None,
+                    "caption": "She sank into the hot spring, and the journey's ache lifted into the steam and the stars.",
+                    "prompt": "Medium shot. The traveler soaks in a stone hot spring, eyes closed; ethereal steam drifts upward, catching soft light. Brilliant starry sky.",
+                    "durationMs": 5200
+                },
+                {
+                    "id": "p4",
+                    "imageUrl": "/eldoria_p4.png",
+                    "videoUrl": None,
+                    "audioUrl": None,
+                    "caption": "The tavern door gave way to warmth — light, voices, the smell of something good.",
+                    "prompt": "Low-angle dynamic shot. The traveler pushes open a heavy wooden door into a bustling warm tavern; golden light pours out.",
+                    "durationMs": 5200
+                },
+                {
+                    "id": "p5",
+                    "imageUrl": "/eldoria_p5.png",
+                    "videoUrl": None,
+                    "audioUrl": None,
+                    "caption": "By the hearth she cradled the mug, and for the first time in weeks, she smiled.",
+                    "prompt": "Medium close-up. The traveler in a plush armchair by a roaring stone hearth, holding a steaming mug, gentle smile, warm firelight.",
+                    "durationMs": 5200
+                },
+                {
+                    "id": "p6",
+                    "imageUrl": "/eldoria_p6.png",
+                    "videoUrl": None,
+                    "audioUrl": None,
+                    "caption": "Snow fell soft over the sleeping village, and Eldoria kept its quiet, glowing watch.",
+                    "prompt": "POV from inside a cabin looking out a wooden window; soft snow over the sleeping village at night, glowing windows, cool blue tones.",
+                    "durationMs": 5200
+                }
+            ]
+        elif scene_id == "canon_86cfa3fe-c56d-4fda-a066-469d40eb7cf0": # The School of Magic
+            panels = [
+                {
+                    "id": "magic_school_p1",
+                    "prompt": "In the eastern city of Pavlovia, the School of Magic rises in tiered halls of pale stone.",
+                    "caption": "In the eastern city of Pavlovia, the School of Magic rises in tiered halls of pale stone, where apprentices are sent to study far from the wars.",
+                    "imageUrl": "http://localhost:8000/cache/schoolofmagic.jpg",
+                    "videoUrl": None,
                     "audioUrl": None,
                     "durationMs": 5200
                 }
@@ -1044,6 +1198,21 @@ def post_contribute(payload: ContributePayload, authorization: str | None = Head
     """POST /contribute -> Execute world_engine_workflow ingest synchronously"""
     user_id = get_user_id_from_token(authorization, strict=True)
 
+    store = get_store()
+    from app.core.lifecycle import is_window_open, tick
+    active_w = tick(store)
+    if not active_w or not is_window_open(active_w):
+        return {
+            "status": "rejected",
+            "verdict": "CLOSED",
+            "score": 0,
+            "message": "This world has closed — it's now an archived collectible."
+        }
+
+    world_id_to_use = payload.world_id
+    if world_id_to_use is None:
+        world_id_to_use = active_w.id
+
     from google.adk.sessions import InMemorySessionService
     from google.genai import types
 
@@ -1059,7 +1228,7 @@ def post_contribute(payload: ContributePayload, authorization: str | None = Head
         "user_text": f"Type: {payload.type}. Title: {payload.title}. Body: {payload.body}",
         "author_id": user_id,
         "id_token": authorization.replace("Bearer ", "") if authorization else None,
-        "world_id": payload.world_id,
+        "world_id": world_id_to_use,
         "derived_from": payload.derived_from,
         "references": payload.references
     }

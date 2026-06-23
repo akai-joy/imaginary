@@ -11,6 +11,15 @@ export default function LoreDrawer({ id, onClose, onNavigate, onDiscovered, onCo
   const api = useApi()
   const [rec, setRec] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [world, setWorld] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    api.getWorld().then((w) => alive && setWorld(w)).catch(() => {})
+    return () => { alive = false }
+  }, [api])
+
+  const isClosed = world?.window_open === false || world?.status === 'archived'
 
   useEffect(() => {
     let alive = true
@@ -72,7 +81,7 @@ export default function LoreDrawer({ id, onClose, onNavigate, onDiscovered, onCo
               </div>
             )}
 
-            {onCompose ? (
+            {!isClosed && (onCompose ? (
               <button type="button" className="drawer-add" onClick={() => onCompose(rec.id)}>
                 ✦ Add connected lore
               </button>
@@ -80,7 +89,7 @@ export default function LoreDrawer({ id, onClose, onNavigate, onDiscovered, onCo
               <Link className="drawer-add" to={`/submit?references=${rec.id}`}>
                 ✦ Add connected lore
               </Link>
-            )}
+            ))}
           </>
         )}
       </aside>

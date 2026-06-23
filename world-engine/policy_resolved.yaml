@@ -89,6 +89,9 @@ scoring:
     build_on: 0.3
     consistency: 0.3
     creativity: 0.4
+season:
+  auto_rollover: false
+  drop_days: 14
 security:
   dangerous_actions_require_confirmation:
   - deploy

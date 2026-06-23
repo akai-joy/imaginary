@@ -16,10 +16,11 @@
 import os
 import sqlite3
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.core import lifecycle
 from app.core.store import SQLiteCanonStore
@@ -33,6 +34,7 @@ from app.core.types import (
     World,
     WorldStatus,
 )
+from app.fast_api_app import app
 
 
 @pytest.fixture
@@ -54,7 +56,7 @@ def _canon(entry_id, **kw):
         body=kw.get("body", "lore"),
         contributor_id=kw.get("contributor_id", "u1"),
         world_id=kw.get("world_id", DEFAULT_WORLD_ID),
-        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 
@@ -92,7 +94,7 @@ def test_save_get_list_worlds_round_trip(store):
         opening_line="The tide turned, and so did the crew.",
         art_style_directive="weathered nautical ink",
         moderation_profile="strict",
-        opens_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        opens_at=datetime(2026, 7, 1, tzinfo=UTC),
     )
     store.save_world(w)
 
@@ -101,13 +103,13 @@ def test_save_get_list_worlds_round_trip(store):
     assert loaded.moderation_profile == "strict"
     assert loaded.art_style_directive == "weathered nautical ink"
     # Newest opens_at first
-    assert [x.id for x in store.list_worlds()][0] == "world_pirates"
+    assert next(x.id for x in store.list_worlds()) == "world_pirates"
 
 
 def test_get_active_world_picks_most_recent_active(store):
     store.save_world(World(
         id="world_pirates", theme="Pirates", opening_line="x",
-        opens_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        opens_at=datetime(2026, 7, 1, tzinfo=UTC),
     ))
     # Two active worlds: the most recently opened one wins.
     assert store.get_active_world().id == "world_pirates"
@@ -180,7 +182,7 @@ def test_self_healing_migration_adds_world_id_to_legacy_tables():
             conn.execute(
                 "INSERT INTO canon_entries VALUES (?,?,?,?,?,?,?,?)",
                 ("canon_old", "lore", "Old", "body", "u1", "[]", 1,
-                 datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat()),
+                 datetime(2026, 1, 1, tzinfo=UTC).isoformat()),
             )
             conn.commit()
 
@@ -214,7 +216,7 @@ def test_rollover_world_closes_current_and_opens_next(store):
         id="world_pirates",
         theme="Pirates",
         opening_line="The tide turned, and so did the crew.",
-        opens_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        opens_at=datetime(2026, 7, 1, tzinfo=UTC),
     )
     archived, opened = lifecycle.rollover_world(store, next_world)
 
@@ -249,7 +251,7 @@ def test_controller_stamps_world_id_on_canon(store, monkeypatch):
                 "contributor_id": "u1",
                 "derived_from": [],
                 "version": 1,
-                "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
             },
         }
     }
@@ -259,3 +261,133 @@ def test_controller_stamps_world_id_on_canon(store, monkeypatch):
     saved = store.get_canon_entry("canon_contrib1")
     assert saved is not None
     assert saved.world_id == "world_pirates"
+
+
+# --- added for window helpers, GET /world, /contribute, /internal/world/schedule tests ---
+
+
+@pytest.fixture
+def client(store, monkeypatch):
+    monkeypatch.setattr("app.fast_api_app.get_store", lambda: store)
+    def mock_get_user_id(authorization: str | None, strict: bool = False) -> str:
+        if not authorization or not authorization.startswith("Bearer "):
+            return "playground_user"
+        return authorization.replace("Bearer ", "")
+    monkeypatch.setattr("app.fast_api_app.get_user_id_from_token", mock_get_user_id)
+    return TestClient(app)
+
+
+def test_window_open_vs_closed(store):
+    # closes_at is None means window is open
+    w1 = World(id="w_open", theme="Theme", opening_line="Line", closes_at=None, status=WorldStatus.ACTIVE)
+    assert lifecycle.is_window_open(w1)
+    assert lifecycle.seconds_remaining(w1) is None
+
+    # closes_at in future is open
+    future = datetime(2026, 12, 31, tzinfo=UTC)
+    w2 = World(id="w_future", theme="Theme", opening_line="Line", closes_at=future, status=WorldStatus.ACTIVE)
+    assert lifecycle.is_window_open(w2, now=datetime(2026, 6, 1, tzinfo=UTC))
+    assert lifecycle.seconds_remaining(w2, now=datetime(2026, 6, 1, tzinfo=UTC)) > 0
+
+    # closes_at in past is closed
+    past = datetime(2026, 1, 1, tzinfo=UTC)
+    w3 = World(id="w_past", theme="Theme", opening_line="Line", closes_at=past, status=WorldStatus.ACTIVE)
+    assert not lifecycle.is_window_open(w3, now=datetime(2026, 6, 1, tzinfo=UTC))
+    assert lifecycle.seconds_remaining(w3, now=datetime(2026, 6, 1, tzinfo=UTC)) == 0
+
+    # archived is closed even if closes_at in future
+    w4 = World(id="w_archived", theme="Theme", opening_line="Line", closes_at=future, status=WorldStatus.ARCHIVED)
+    assert not lifecycle.is_window_open(w4, now=datetime(2026, 6, 1, tzinfo=UTC))
+
+
+def test_tick_archives_and_is_idempotent(store):
+    # Archive default world first to ensure store.get_active_world() is None when our test world is archived
+    lifecycle.close_world(store, DEFAULT_WORLD_ID)
+
+    past = datetime(2026, 1, 1, tzinfo=UTC)
+    w = World(id="w_tick_test", theme="Theme", opening_line="Line", closes_at=past, status=WorldStatus.ACTIVE)
+    store.save_world(w)
+
+    # Initial state
+    assert store.get_active_world().id == "w_tick_test"
+
+    # Tick past deadline archives it
+    active_world_after = lifecycle.tick(store, now=datetime(2026, 6, 1, tzinfo=UTC))
+    assert active_world_after is None
+    assert store.get_active_world() is None
+    assert store.get_world("w_tick_test").status == WorldStatus.ARCHIVED
+
+    # Tick is idempotent
+    active_world_after_2 = lifecycle.tick(store, now=datetime(2026, 6, 1, tzinfo=UTC))
+    assert active_world_after_2 is None
+    assert store.get_world("w_tick_test").status == WorldStatus.ARCHIVED
+
+
+def test_schedule_world(store):
+    w = World(id="w_sched", theme="Theme", opening_line="Line", status=WorldStatus.ACTIVE)
+    store.save_world(w)
+
+    opens = datetime(2026, 6, 1, tzinfo=UTC)
+    closes = datetime(2026, 6, 15, tzinfo=UTC)
+    res = lifecycle.schedule_world(store, "w_sched", opens_at=opens, closes_at=closes)
+    assert res is not None
+    assert res.opens_at == opens
+    assert res.closes_at == closes
+
+    loaded = store.get_world("w_sched")
+    assert loaded.opens_at == opens
+    assert loaded.closes_at == closes
+
+
+def test_contribute_gated_when_closed(client, store, monkeypatch):
+    # Set active world with closes_at in the past
+    past = datetime(2026, 1, 1, tzinfo=UTC)
+    w = World(id="w_closed_contribute", theme="Theme", opening_line="Line", closes_at=past, status=WorldStatus.ACTIVE)
+    store.save_world(w)
+
+    # Mock the runner anyway, to ensure it is NEVER called when closed (it returns offline error if it runs)
+    runner_called = False
+    class MockRunner:
+        def run(self, *args, **kwargs):
+            nonlocal runner_called
+            runner_called = True
+            return []
+    monkeypatch.setattr("app.core.runner_factory.create_runner", lambda app, service: MockRunner())
+
+    payload = {
+        "title": "A New Hero",
+        "type": "character",
+        "body": "A brave warrior.",
+        "derived_from": [],
+        "references": [],
+        "world_id": None
+    }
+
+    # Request /contribute -> should fail immediately with CLOSED status, and NOT run the pipeline
+    response = client.post(
+        "/contribute",
+        json=payload,
+        headers={"Authorization": "Bearer tester"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "rejected"
+    assert data["verdict"] == "CLOSED"
+    assert "closed" in data["message"].lower()
+    assert not runner_called
+
+
+def test_get_world_reports_window_open_and_remaining(client, store):
+    # Set active world with future closes_at
+    future = datetime(2026, 12, 31, tzinfo=UTC)
+    w = World(id="w_open_get_world", theme="Future Theme", opening_line="Line", closes_at=future, status=WorldStatus.ACTIVE)
+    store.save_world(w)
+
+    response = client.get("/world")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["world_id"] == "w_open_get_world"
+    assert data["theme"] == "Future Theme"
+    assert data["window_open"] is True
+    assert data["time_remaining_seconds"] is not None
+    assert data["time_remaining_seconds"] > 0

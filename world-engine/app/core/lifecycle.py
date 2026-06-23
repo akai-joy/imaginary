@@ -25,12 +25,105 @@ skeleton exposes the deterministic state transitions it builds on.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timedelta
 
+from app.core.config import load_policy_config
 from app.core.store import CanonStore
 from app.core.types import World, WorldStatus
 
 logger = logging.getLogger(__name__)
+
+
+def is_window_open(world: World, *, now: datetime | None = None) -> bool:
+    """Check if the contribution window is open. Deterministic."""
+    if world.status != WorldStatus.ACTIVE:
+        return False
+    if world.closes_at is None:
+        return True
+    if now is None:
+        now = datetime.now(UTC)
+
+    closes_at = world.closes_at
+    if closes_at.tzinfo is None:
+        closes_at = closes_at.replace(tzinfo=UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+
+    return now < closes_at
+
+
+def seconds_remaining(world: World, *, now: datetime | None = None) -> int | None:
+    """Return remaining seconds in window, or None if open-ended."""
+    if world.closes_at is None:
+        return None
+    if now is None:
+        now = datetime.now(UTC)
+
+    closes_at = world.closes_at
+    if closes_at.tzinfo is None:
+        closes_at = closes_at.replace(tzinfo=UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+
+    return max(0, int((closes_at - now).total_seconds()))
+
+
+def schedule_world(
+    store: CanonStore,
+    world_id: str,
+    *,
+    opens_at: datetime | None = None,
+    closes_at: datetime | None = None,
+) -> World | None:
+    """Set opens_at and/or closes_at fields on a world and save it. Deterministic."""
+    world = store.get_world(world_id)
+    if world is None:
+        return None
+    if opens_at is not None:
+        world.opens_at = opens_at
+    if closes_at is not None:
+        world.closes_at = closes_at
+    store.save_world(world)
+    return world
+
+
+def tick(store: CanonStore, *, now: datetime | None = None) -> World | None:
+    """Lazy enforcement of the contribution window.
+
+    Gets the active world. If it is active and its closes_at is in the past,
+    archives the world. Returns the active world after enforcement (or None if none is active).
+    """
+    world = store.get_active_world()
+    if world is None:
+        return None
+
+    if world.status == WorldStatus.ACTIVE and world.closes_at is not None:
+        if now is None:
+            now = datetime.now(UTC)
+        closes_at = world.closes_at
+        if closes_at.tzinfo is None:
+            closes_at = closes_at.replace(tzinfo=UTC)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=UTC)
+
+        if now >= closes_at:
+            logger.info("tick: world %s has passed its deadline. Auto-closing.", world.id)
+            close_world(store, world.id, now=now)
+            world = store.get_world(world.id)
+
+            # Stretch Goal Check: Trigger showcase tasks on finale/auto-close
+            policy = load_policy_config()
+            auto_rollover = policy.get("season", {}).get("auto_rollover", False)
+            if auto_rollover:
+                try:
+                    from app.fast_api_app import enqueue_showcase_task
+                    enqueue_showcase_task()
+                except Exception as e:
+                    logger.error("Failed to fire finale showcase: %s", e)
+
+    if world and world.status == WorldStatus.ACTIVE:
+        return world
+    return None
 
 
 def close_world(
@@ -49,7 +142,7 @@ def close_world(
 
     world.status = WorldStatus.ARCHIVED
     if world.closes_at is None:
-        world.closes_at = now or datetime.now(timezone.utc)
+        world.closes_at = now or datetime.now(UTC)
     store.save_world(world)
     logger.info("Lifecycle archived world: %s", world.id)
     return world
@@ -58,6 +151,10 @@ def close_world(
 def open_world(store: CanonStore, world: World) -> World:
     """Open a new themed drop as the active world. Deterministic."""
     world.status = WorldStatus.ACTIVE
+    if world.closes_at is None:
+        policy = load_policy_config()
+        drop_days = policy.get("season", {}).get("drop_days", 14)
+        world.closes_at = world.opens_at + timedelta(days=drop_days)
     store.save_world(world)
     logger.info("Lifecycle opened world: %s", world.id)
     return world
@@ -75,7 +172,5 @@ def rollover_world(
     """
     current = store.get_active_world()
     archived = close_world(store, current.id, now=now) if current else None
-    # TODO(showcase): fire the Showcase subgraph as a season-finale anthology over
-    # `archived`'s top trees before opening the next drop.
     opened = open_world(store, next_world)
     return archived, opened

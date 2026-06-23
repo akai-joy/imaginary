@@ -42,6 +42,8 @@ export default function Layout() {
 
   const initial = (user?.displayName || user?.email || '?').charAt(0).toUpperCase()
 
+  const isClosed = world?.window_open === false || world?.status === 'archived' || left === 'closed'
+
   return (
     <div className="app">
       {world && <WorldEntry world={world} />}
@@ -57,7 +59,7 @@ export default function Layout() {
           <NavLink to="/storylines">Storylines</NavLink>
           <NavLink to="/showcase">Showcase</NavLink>
           {/* Prominent global entry for starting a brand-new root (no seed = new thread). */}
-          <NavLink to="/submit" className="nav-cta">✦ Add lore</NavLink>
+          {!isClosed && <NavLink to="/submit" className="nav-cta">✦ Add lore</NavLink>}
         </nav>
         <div className="user">
           {apiMock && <span className="badge" title="No backend configured — showing demo data">demo data</span>}
@@ -70,14 +72,21 @@ export default function Layout() {
       {world && (
         <section className="world-banner">
           <div>
-            <span className="wb-mark">Active drop · {world.theme}</span>
+            <span className="wb-mark">{isClosed ? 'Archived drop' : 'Active drop'} · {world.theme}</span>
             {world.opening_line && <p className="wb-line">“{world.opening_line}”</p>}
           </div>
-          {left && (
-            <div className="wb-clock" title="When this drop closes it is archived as a collectible">
-              <span className="t">{left}</span>
-              <span className="l">until the world closes</span>
+          {isClosed ? (
+            <div className="wb-clock sealed" title="This world has closed and is now a read-only archived collectible">
+              <span className="t">✦ Sealed</span>
+              <span className="l">archived collectible</span>
             </div>
+          ) : (
+            left && (
+              <div className="wb-clock" title="When this drop closes it is archived as a collectible">
+                <span className="t">{left}</span>
+                <span className="l">until the world closes</span>
+              </div>
+            )
           )}
         </section>
       )}
