@@ -212,17 +212,17 @@ export const DEMO = {
     logline:
       "A weary traveler finds comfort in the peaceful mountain village of Eldoria — from its steaming hot springs to its cozy tavern hearth.",
     panels: [
-      { id: "p1", caption: "At the edge of the white pass, the traveler saw it at last — Eldoria, glowing gold against the dark.",
+      { id: "p1", imageUrl: "/eldoria_p1.png", caption: "At the edge of the white pass, the traveler saw it at last — Eldoria, glowing gold against the dark.",
         prompt: "Wide shot. A weary traveler on a snow-covered mountain path; the golden lights of Eldoria nestle among snowy peaks. Dusk, deep blues and purples." },
-      { id: "p2", caption: "The village lay cupped in the valley, steam rising from the springs like breath on the cold air.",
+      { id: "p2", imageUrl: "/eldoria_p2.png", caption: "The village lay cupped in the valley, steam rising from the springs like breath on the cold air.",
         prompt: "High-angle establishing shot. Eldoria in a snowy valley, rustic cabins, warm windows, thick steam from mineral hot springs. Starry sky." },
-      { id: "p3", kind: "video", caption: "She sank into the hot spring, and the journey's ache lifted into the steam and the stars.",
+      { id: "p3", kind: "video", imageUrl: "/eldoria_p3.png", caption: "She sank into the hot spring, and the journey's ache lifted into the steam and the stars.",
         prompt: "Medium shot. The traveler soaks in a stone hot spring, eyes closed; ethereal steam drifts upward, catching soft light. Brilliant starry sky." },
-      { id: "p4", caption: "The tavern door gave way to warmth — light, voices, the smell of something good.",
+      { id: "p4", imageUrl: "/eldoria_p4.png", caption: "The tavern door gave way to warmth — light, voices, the smell of something good.",
         prompt: "Low-angle dynamic shot. The traveler pushes open a heavy wooden door into a bustling warm tavern; golden light pours out." },
-      { id: "p5", caption: "By the hearth she cradled the mug, and for the first time in weeks, she smiled.",
+      { id: "p5", imageUrl: "/eldoria_p5.png", caption: "By the hearth she cradled the mug, and for the first time in weeks, she smiled.",
         prompt: "Medium close-up. The traveler in a plush armchair by a roaring stone hearth, holding a steaming mug, gentle smile, warm firelight." },
-      { id: "p6", caption: "Snow fell soft over the sleeping village, and Eldoria kept its quiet, glowing watch.",
+      { id: "p6", imageUrl: "/eldoria_p6.png", caption: "Snow fell soft over the sleeping village, and Eldoria kept its quiet, glowing watch.",
         prompt: "POV from inside a cabin looking out a wooden window; soft snow over the sleeping village at night, glowing windows, cool blue tones." },
     ],
     choices: [

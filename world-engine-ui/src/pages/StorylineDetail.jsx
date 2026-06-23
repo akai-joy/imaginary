@@ -15,6 +15,13 @@ export default function StorylineDetail() {
   const [viewMode, setViewMode] = useState('player')
   // The node a "Continue" action will build on (derived_from). null = drawer closed.
   const [continueFrom, setContinueFrom] = useState(null)
+  const [world, setWorld] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    api.getWorld().then((w) => alive && setWorld(w)).catch(() => {})
+    return () => { alive = false }
+  }, [api])
 
   useEffect(() => {
     let live = true
@@ -28,6 +35,8 @@ export default function StorylineDetail() {
       live = false
     }
   }, [api, treeId, reloadKey])
+
+  const isClosed = world?.window_open === false || world?.status === 'archived'
 
   if (error)
     return (
@@ -70,14 +79,16 @@ export default function StorylineDetail() {
             📜 Lineage List
           </button>
           {/* Continue the thread from its latest beat (the tip), or the root if empty. */}
-          <button
-            className="btn-continue-story"
-            onClick={() =>
-              setContinueFrom(tipId)
-            }
-          >
-            ✦ Continue this story
-          </button>
+          {!isClosed && (
+            <button
+              className="btn-continue-story"
+              onClick={() =>
+                setContinueFrom(tipId)
+              }
+            >
+              ✦ Continue this story
+            </button>
+          )}
         </div>
       </header>
 
@@ -124,9 +135,11 @@ export default function StorylineDetail() {
                       </>
                     )}
                   </p>
-                  <button className="node-continue" onClick={() => setContinueFrom(n.id)}>
-                    ✦ {n.id === tipId ? 'Continue from here' : 'Fork from here'}
-                  </button>
+                  {!isClosed && (
+                    <button className="node-continue" onClick={() => setContinueFrom(n.id)}>
+                      ✦ {n.id === tipId ? 'Continue from here' : 'Fork from here'}
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
