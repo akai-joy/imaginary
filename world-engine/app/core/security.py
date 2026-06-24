@@ -142,6 +142,33 @@ def detect_deterministic_injection(text: str) -> bool:
     return False
 
 
+def screen_output_content(text: str) -> None:
+    """Reject HTML/JS, img tags, and non-allowlisted URLs in outbound content.
+
+    Raises ValueError on a violation. Shared by after_model (LLM output) and
+    after_tool (tool results, which are read back as untrusted) so both paths
+    enforce the same exfiltration guardrails — a poisoned tool result must not
+    smuggle out an <img> beacon or off-allowlist URL that model output couldn't.
+    """
+    if not text:
+        return
+    lower = text.lower()
+    if "<script" in lower or "javascript:" in lower:
+        raise ValueError(
+            "Security Block: Output contains forbidden Javascript execution payload."
+        )
+    if "<img" in lower:
+        raise ValueError(
+            "Security Block: Output contains forbidden img tags (exfiltration vector)."
+        )
+    urls = re.findall(r'https?://[^\s<>"]+|file://[^\s<>"]+', text)
+    for url in urls:
+        if not any(re.match(pattern, url) for pattern in URL_ALLOWLIST):
+            raise ValueError(
+                f"Security Block: Output contains non-allowlisted URL: {url}"
+            )
+
+
 class FlashLiteScreenResponse(BaseModel):
     is_injection: bool
     reason: str
@@ -332,29 +359,18 @@ class SecurityPlugin(BasePlugin):
                         "Security Block: Model response contains banned instruction-like directives."
                     )
 
-                # Reject HTML, JavaScript, img tags, and non-allowlisted URLs
-                if "<script" in text.lower() or "javascript:" in text.lower():
-                    raise ValueError(
-                        "Security Block: Model response contains forbidden Javascript execution payload."
-                    )
-                if "<img" in text.lower():
-                    raise ValueError(
-                        "Security Block: Model response contains forbidden img tags (exfiltration vector)."
-                    )
+                # Reject HTML/JS, img tags, and non-allowlisted URLs (shared with
+                # after_tool so model output and tool results enforce parity).
+                screen_output_content(text)
 
-                # Look for URLs and reject if they are not in the allowlist
-                # Regex matching HTTP/HTTPS/FILE URLs
-                urls = re.findall(r'https?://[^\s<>"]+|file://[^\s<>"]+', text)
-                for url in urls:
-                    allowed = False
-                    for pattern in URL_ALLOWLIST:
-                        if re.match(pattern, url):
-                            allowed = True
-                            break
-                    if not allowed:
-                        raise ValueError(
-                            f"Security Block: Model response contains non-allowlisted URL: {url}"
-                        )
+                # Data-loss prevention: redact any PII the model emitted before it
+                # reaches the store / UI. Done prior to schema validation so the
+                # validated payload matches the text we actually emit. Redaction
+                # only substitutes string tokens, so JSON output stays well-formed.
+                redacted = redact_pii(text)
+                if redacted != text:
+                    text = redacted
+                    part.text = text
 
                 # Schema validation if expected
                 if expected_schema:
@@ -378,13 +394,14 @@ class SecurityPlugin(BasePlugin):
         """
         agent_name = tool_context.agent_name or "unknown"
 
-        # 1. Per-agent tool allowlist
-        if agent_name in AGENT_TOOL_ALLOWLIST:
-            allowed_tools = AGENT_TOOL_ALLOWLIST[agent_name]
-            if tool.name not in allowed_tools:
-                raise ValueError(
-                    f"Security Block: Agent '{agent_name}' is not authorized to call tool '{tool.name}'."
-                )
+        # 1. Per-agent tool allowlist (deny-by-default: an agent that is not in
+        # the allowlist — or is listed with no tools — gets no tool access, per
+        # the Least Agency principle. Unknown agents must never fall through.)
+        allowed_tools = AGENT_TOOL_ALLOWLIST.get(agent_name, [])
+        if tool.name not in allowed_tools:
+            raise ValueError(
+                f"Security Block: Agent '{agent_name}' is not authorized to call tool '{tool.name}'."
+            )
 
         # 2. Block dangerous tools from content-reading agents
         if agent_name in CONTENT_READING_AGENTS:
@@ -443,6 +460,10 @@ class SecurityPlugin(BasePlugin):
                     raise ValueError(
                         "Security Block: Prompt injection detected in tool output."
                     )
+                # Apply the same exfiltration guardrails as model output: a
+                # poisoned tool result must not smuggle out an <img> beacon,
+                # script, or off-allowlist URL.
+                screen_output_content(redacted)
                 if not redacted.startswith("=== START DATA ==="):
                     redacted = f"=== START DATA ===\n{redacted}\n=== END DATA ==="
                 return redacted

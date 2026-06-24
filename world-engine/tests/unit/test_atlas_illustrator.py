@@ -82,6 +82,9 @@ def test_atlas_node_success(temp_store, monkeypatch):
     canvas_cache_file = os.path.join("cache", "mapcanvas_world_genesis_v2.png")
     if os.path.exists(canvas_cache_file):
         os.remove(canvas_cache_file)
+    basemap_cache_file = os.path.join("cache", "basemap_world_genesis.png")
+    if os.path.exists(basemap_cache_file):
+        os.remove(basemap_cache_file)
 
     w = World(
         id="world_genesis",
@@ -136,7 +139,7 @@ def test_atlas_node_success(temp_store, monkeypatch):
     ctx2 = SimpleContext()
     events2 = list(atlas_node(ctx2, entry))
     assert len(events2) == 1
-    assert call_count == 1
+    assert call_count == 2
 
     cache_file = os.path.join("cache", "maptile_loc_placed_v1.png")
     if os.path.exists(cache_file):
@@ -144,6 +147,8 @@ def test_atlas_node_success(temp_store, monkeypatch):
     canvas_cache_file = os.path.join("cache", "mapcanvas_world_genesis_v2.png")
     if os.path.exists(canvas_cache_file):
         os.remove(canvas_cache_file)
+    if os.path.exists(basemap_cache_file):
+        os.remove(basemap_cache_file)
 
 def test_cartography_controller_and_prefix_checks(temp_store):
     for path in [

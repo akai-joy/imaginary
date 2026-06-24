@@ -216,11 +216,11 @@ export const DEMO = {
         prompt: "Wide shot. A weary traveler on a snow-covered mountain path; the golden lights of Eldoria nestle among snowy peaks. Dusk, deep blues and purples." },
       { id: "p2", imageUrl: "/eldoria_p2.png", caption: "The village lay cupped in the valley, steam rising from the springs like breath on the cold air.",
         prompt: "High-angle establishing shot. Eldoria in a snowy valley, rustic cabins, warm windows, thick steam from mineral hot springs. Starry sky." },
-      { id: "p3", kind: "video", imageUrl: "/eldoria_p3.png", caption: "She sank into the hot spring, and the journey's ache lifted into the steam and the stars.",
+      { id: "p3", kind: "video", imageUrl: "/eldoria_p3.png", caption: "He sank into the hot spring, and the journey's ache lifted into the steam and the stars.",
         prompt: "Medium shot. The traveler soaks in a stone hot spring, eyes closed; ethereal steam drifts upward, catching soft light. Brilliant starry sky." },
       { id: "p4", imageUrl: "/eldoria_p4.png", caption: "The tavern door gave way to warmth — light, voices, the smell of something good.",
         prompt: "Low-angle dynamic shot. The traveler pushes open a heavy wooden door into a bustling warm tavern; golden light pours out." },
-      { id: "p5", imageUrl: "/eldoria_p5.png", caption: "By the hearth she cradled the mug, and for the first time in weeks, she smiled.",
+      { id: "p5", imageUrl: "/eldoria_p5.png", caption: "By the hearth he cradled the mug, and for the first time in weeks, he smiled.",
         prompt: "Medium close-up. The traveler in a plush armchair by a roaring stone hearth, holding a steaming mug, gentle smile, warm firelight." },
       { id: "p6", imageUrl: "/eldoria_p6.png", caption: "Snow fell soft over the sleeping village, and Eldoria kept its quiet, glowing watch.",
         prompt: "POV from inside a cabin looking out a wooden window; soft snow over the sleeping village at night, glowing windows, cool blue tones." },
@@ -236,7 +236,7 @@ export const DEMO = {
     panels: [
       { id: "h1", caption: "An old fisher pulled up a stool and began a tale of the lake that never freezes.",
         prompt: "Cozy tavern interior, close on an old fisher telling a story by firelight, attentive faces, warm shadows." },
-      { id: "h2", caption: "By the time the fire burned low, she had a map drawn on a napkin — and a reason to stay.",
+      { id: "h2", caption: "By the time the fire burned low, he had a map drawn on a napkin — and a reason to stay.",
         prompt: "Close-up of a napkin with a rough ink map, a mug ring staining one corner, a hand resting beside it." },
     ],
     choices: [

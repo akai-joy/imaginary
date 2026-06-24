@@ -111,12 +111,48 @@ def atlas_node(ctx: Context, node_input: CanonEntry):
             except Exception as e:
                 logger.error("Atlas Node: failed to load existing canvas: %s", e)
 
-    # If no existing canvas, create base canvas
+    # If no existing canvas, load or generate base canvas
     if canvas_image is None:
-        canvas_image = Image.new("RGB", (1024, 1024), (230, 215, 184))
-        draw = ImageDraw.Draw(canvas_image)
-        draw.rectangle([(20, 20), (1004, 1004)], outline=(180, 160, 130), width=3)
-        logger.info("Atlas Node: created new base canvas.")
+        basemap_filename = f"basemap_{world.id}.png"
+        basemap_cache_path = os.path.join(CACHE_DIR, basemap_filename)
+
+        if os.path.exists(basemap_cache_path):
+            logger.info("Atlas Node: base map cache hit.")
+            try:
+                canvas_image = Image.open(basemap_cache_path)
+            except Exception as e:
+                logger.error("Atlas Node: failed to load cached base map: %s", e)
+
+        if canvas_image is None:
+            logger.info("Atlas Node: generating new base map.")
+            art_style = world.art_style_directive or "Painterly illustration"
+            base_map_prompt = (
+                f"{art_style}; a top-down illustrated fantasy world map overview, theme: {world.theme}. "
+                f"{world.opening_line}. Empty land, oceans, topography; no text, no labels, no icons, no pins."
+            )
+
+            client = None
+            try:
+                client = genai.Client()
+            except Exception as e:
+                logger.warning("Atlas Node: genai client unavailable for base map (%s); using mock base map.", e)
+
+            base_map_bytes = generate_imagen_panel(client, base_map_prompt, 1)
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            with open(basemap_cache_path, "wb") as f:
+                f.write(base_map_bytes)
+
+            try:
+                canvas_image = Image.open(io.BytesIO(base_map_bytes))
+            except Exception as e:
+                logger.error("Atlas Node: failed to parse generated base map, creating solid canvas: %s", e)
+                canvas_image = Image.new("RGB", (1024, 1024), (230, 215, 184))
+                draw = ImageDraw.Draw(canvas_image)
+                draw.rectangle([(20, 20), (1004, 1004)], outline=(180, 160, 130), width=3)
+
+        # Ensure canvas image is exactly 1024x1024
+        if canvas_image.size != (1024, 1024):
+            canvas_image = canvas_image.resize((1024, 1024))
 
     # Paint/Composite the tile onto the canvas at (x%, y%)
     tile_img = Image.open(io.BytesIO(tile_bytes))

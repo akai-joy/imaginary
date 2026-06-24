@@ -14,11 +14,41 @@
 
 from app.agents.moderation import (
     ModerationVerdict,
+    load_policy_config,
     moderation_node,
     scan_hidden_content,
     scan_prompt_injection,
 )
 from app.core.types import Contribution, ContributionType
+
+
+def test_hard_block_is_profile_independent_and_complete() -> None:
+    """hard_block categories are non-negotiable and identical across every profile.
+
+    Config-integrity guideline (Zero Trust governance): the three hard-block
+    categories must apply under strict, default, AND permissive. A profile must
+    never be able to drop one or downgrade it to a non-blocking flag.
+    """
+    policy = load_policy_config()
+    mod = policy["moderation"]
+    hard_block = set(mod["hard_block"])
+
+    required = {
+        "minor_sexualization",
+        "illegal_synthesis_instructions",
+        "threats_doxxing_real_people",
+    }
+    assert required <= hard_block
+
+    # hard_block lives at the moderation top level, not under any profile, so it
+    # is structurally identical for every profile. Verify additionally that no
+    # profile downgrades a hard-block category by listing it as a (non-blocking)
+    # flag.
+    for name, profile in mod["profiles"].items():
+        flagged = set(profile.get("flag", []))
+        assert hard_block.isdisjoint(flagged), (
+            f"profile '{name}' downgrades a hard-block category to a flag"
+        )
 
 
 class _FakeCtx:

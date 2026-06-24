@@ -263,6 +263,60 @@ def test_controller_stamps_world_id_on_canon(store, monkeypatch):
     assert saved.world_id == "world_pirates"
 
 
+def test_controller_attributes_ledger_and_canon_to_contribution(store, monkeypatch):
+    """Every store mutation is attributable to its contribution + author.
+
+    Zero Trust observability: no orphan / unattributable writes. The ledger
+    entry carries the contribution id and author, the canon id follows the
+    `canon_{contribution_id}` convention, and the canon_ prefix round-trips back
+    to the originating contribution (the ledger-lookup invariant in CLAUDE.md).
+    """
+    from app.core import controller as controller_mod
+
+    monkeypatch.setattr(controller_mod, "get_store", lambda: store)
+
+    contrib = Contribution(
+        id="contrib42", author_id="author7", world_id=DEFAULT_WORLD_ID,
+        type="plot", title="A beat", body="something happens",
+    )
+    ctx = MagicMock()
+    ctx.state = {
+        "scoring_proposal": {"points_delta": 85, "reason": "creative"},
+        "narrator_proposal": {
+            "contrib_status": "accepted",
+            "new_entry": {
+                "id": "canon_contrib42",
+                "type": "plot",
+                "title": "A beat",
+                "body": "something happens",
+                "contributor_id": "author7",
+                "derived_from": [],
+                "version": 1,
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
+            },
+        },
+    }
+
+    list(controller_mod.ingest_controller_node(ctx, contrib))
+
+    # Ledger entry is attributed to both the author and the contribution.
+    ledger = store.get_ledger_entries("author7")
+    assert any(
+        e.contribution_id == "contrib42" and e.author_id == "author7"
+        for e in ledger
+    )
+    # Points were recorded against the contribution (clamped into range).
+    assert store.get_points_for_contribution("contrib42") == 85
+
+    # Canon entry follows the canon_{contribution_id} convention, is attributed
+    # to the author, and the prefix strips back to the originating contribution.
+    saved = store.get_canon_entry("canon_contrib42")
+    assert saved is not None
+    assert saved.contributor_id == "author7"
+    assert saved.id == f"canon_{contrib.id}"
+    assert saved.id.removeprefix("canon_") == contrib.id
+
+
 # --- added for window helpers, GET /world, /contribute, /internal/world/schedule tests ---
 
 
