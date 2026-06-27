@@ -7,7 +7,7 @@ const RUNE = { location: '⛰', character: '☉', beast: '✺', spell: '✶', fa
 // Slide-over detail for any canon entity. Opening it discovers the node (clears fog).
 // `onCompose(id)` is optional: when provided, "Add connected lore" opens the inline
 // composer in place; otherwise it deep-links to the full-page /submit form.
-export default function LoreDrawer({ id, onClose, onNavigate, onDiscovered, onCompose }) {
+export default function LoreDrawer({ id, tileUrl, onClose, onNavigate, onDiscovered, onCompose }) {
   const api = useApi()
   const [rec, setRec] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -42,6 +42,10 @@ export default function LoreDrawer({ id, onClose, onNavigate, onDiscovered, onCo
         {!loading && !rec && <p className="muted">Nothing charted here yet.</p>}
         {!loading && rec && (
           <>
+            {tileUrl && (
+              <img className="drawer-tile" src={tileUrl} alt=""
+                onError={(e) => { e.currentTarget.style.display = 'none' }} />
+            )}
             <div className="drawer-kicker">
               {RUNE[rec.type] || '✜'} {rec.type}
               {rec.map_meta?.region ? ` · ${rec.map_meta.region}` : ''}

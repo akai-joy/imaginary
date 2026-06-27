@@ -690,12 +690,17 @@ button { font-family: inherit; cursor: pointer; }
 .wb-clock .l { display: block; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); margin-top: 2px; }
 
 /* ---------- The Atlas (fog-of-war map) ---------- */
-.atlas-wrap { max-width: min(1320px, 96vw); margin: 0 auto; padding: 8px 24px 70px; }
+/* Break out of the .main max-width to span the viewport (no overflow). The map
+   stage is square and height-driven, so real size comes from height (.atlas); the
+   inner .atlas is capped + centered so very wide screens don't leave a square in a void. */
+.atlas-wrap { width: 100vw; margin-inline: calc(50% - 50vw); padding: 8px clamp(16px, 3vw, 48px) 70px; }
 .atlas {
   position: relative;
   width: 100%;
-  height: 74vh;
-  min-height: 460px;
+  max-width: 1680px;
+  margin: 0 auto;
+  height: 82vh;
+  min-height: 560px;
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
@@ -757,15 +762,21 @@ button { font-family: inherit; cursor: pointer; }
 /* The master map canvas the Atlas agent paints into (Phase 2 backdrop). */
 .atlas-canvas {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
-  z-index: 0; opacity: 0.97; animation: fade 0.8s ease; user-select: none; -webkit-user-drag: none;
+  /* Faint atmospheric base only: the master canvas already composites the tiles at
+     the same coords, so the crisp per-tile pools (.place-tile) carry the scenes and
+     this stays dim to avoid a double-image. Replace with a generic fog base (see
+     MAP_FOG_PROMPT.md) to retire it entirely. */
+  z-index: 0; opacity: 0.4; animation: fade 0.8s ease; user-select: none; -webkit-user-drag: none;
 }
-/* Per-location painterly tiles (Phase 1), feathered so they read like map art. */
+/* Discovered "lantern pools": each location's painted tile, feathered into the
+   mist with a warm amber rim. Sits above the fog (z 2) but below the pins (z 3). */
 .place-tile {
   position: absolute; transform: translate(-50%, -50%);
-  width: 20%; max-width: 220px; height: auto; pointer-events: none; z-index: 1;
-  -webkit-mask-image: radial-gradient(closest-side, #000 58%, transparent 100%);
-  mask-image: radial-gradient(closest-side, #000 58%, transparent 100%);
-  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.55));
+  width: 25%; max-width: 320px; height: auto; pointer-events: none; z-index: 2;
+  -webkit-mask-image: radial-gradient(closest-side, #000 56%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 56%, transparent 100%);
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.55))
+          drop-shadow(0 0 26px rgba(232, 176, 86, 0.55));
   animation: tileIn 0.8s cubic-bezier(.2,.7,.2,1) forwards;
 }
 @keyframes tileIn {
@@ -848,8 +859,9 @@ button { font-family: inherit; cursor: pointer; }
   padding: 26px 26px 40px; overflow-y: auto; animation: drawerIn .32s cubic-bezier(.2,.7,.2,1);
 }
 @keyframes drawerIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-.drawer-close { position: absolute; top: 16px; right: 18px; background: none; border: none; color: var(--ink-soft); font-size: 22px; line-height: 1; }
+.drawer-close { position: absolute; z-index: 1; top: 14px; right: 14px; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: color-mix(in srgb, var(--surface) 65%, transparent); backdrop-filter: blur(4px); border: 1px solid var(--line); color: var(--ink-soft); font-size: 20px; line-height: 1; }
 .drawer-close:hover { color: var(--gold); }
+.drawer-tile { display: block; width: calc(100% + 52px); height: auto; margin: -26px -26px 18px; border-bottom: 1px solid color-mix(in srgb, var(--gold) 25%, transparent); }
 .drawer-kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); }
 .drawer h2 { font-family: var(--display); font-size: 26px; font-weight: 600; margin: 8px 0 4px; }
 .drawer-body { font-family: var(--serif); color: var(--ink); margin: 14px 0 0; line-height: 1.7; }

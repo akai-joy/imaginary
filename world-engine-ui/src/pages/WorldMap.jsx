@@ -183,12 +183,27 @@ export default function WorldMap() {
                 <mask id="fogMask">
                   <rect x="0" y="0" width="100" height="100" fill="#fff" />
                   {discovered.map((l) => (
-                    <circle key={l.id} cx={l.x} cy={l.y} r="20" fill="url(#fogHole)" />
+                    <circle key={l.id} cx={l.x} cy={l.y} r="23" fill="url(#fogHole)" />
                   ))}
                 </mask>
               </defs>
               <rect x="0" y="0" width="100" height="100" fill="#1b1d22" opacity="0.9" mask="url(#fogMask)" />
             </svg>
+
+            {/* Charted lantern pools: the location's painted tile, above the fog. */}
+            {locations.map((l) =>
+              l.discovered && l.tile_url ? (
+                <img
+                  key={`tile-${l.id}`}
+                  className="place-tile"
+                  src={getCleanUrl(l.tile_url)}
+                  style={{ left: `${l.x}%`, top: `${l.y}%` }}
+                  alt=""
+                  draggable="false"
+                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+                />
+              ) : null,
+            )}
 
             {locations.map((l) => (
               <button
@@ -238,6 +253,7 @@ export default function WorldMap() {
       {selected && (
         <LoreDrawer
           id={selected}
+          tileUrl={getCleanUrl(byId[selected]?.tile_url)}
           onClose={() => setSelected(null)}
           onNavigate={(id) => setSelected(id)}
           onDiscovered={onDiscovered}
