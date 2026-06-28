@@ -59,9 +59,12 @@ Ordered nodes (an edge runs left→right; Moderation can halt the pipeline):
 1. **Intake/Router** — classify contribution type, normalize into a structured object.
 2. **Moderation/Safety (GATE)** — block/flag disallowed content; halt on BLOCK.
 3. **Continuity** — check the contribution against the canon store for contradictions.
-4. **Provenance** — extract lineage (what it builds on); write edges to the contribution graph.
-5. **Scoring/Critic** — score creativity / consistency / build-on; emit a points delta.
-6. **Narrator/Synthesis** — merge into canon, emit the "what changed in the world" entry.
+4. **Provenance** — extract references (what it builds on) and propose soft reference links.
+5. **Scoring/Critic** — score creativity / consistency / build-on and propose a points delta.
+6. **Narrator/Synthesis** — draft and self-moderate the canon entry summary and propose the write.
+7. **Cartographer** — propose map coordinates (`{x, y}`), region, and nearby links.
+8. **Ingest Controller** (deterministic, non-LLM) — validate, clamp, and persist all proposals.
+9. **Atlas Illustrator** — paint a map tile for the place and composite it into the master map.
 
 A top-level **App object** wraps the root workflow so the local playground, the
 eval harness, and the Cloud runtime can all discover and run it.
@@ -161,10 +164,7 @@ job (title, logline, `Scene N` prompts) into `panels[]`, attaching the cached me
   profile for that world.
 - **Contribution**: `id, author_id, world_id, type(character|location|beast|spell|faction|plot|lore|other),
   title, body, created_at, status(pending|blocked|flagged|accepted|rejected),
-  references(list[canon_id]), derived_from(list[canon_id])`. `references` = the cast/setting the
-  contributor selected from the canon; `derived_from` = explicit fork/continue lineage chosen in
-  the UI (**trusted structure** — the controller honours it directly; content is still moderated).
-  Empty `derived_from` ⇒ a brand-new root.
+  references(list[canon_id]), derived_from(list[canon_id])`. `references` = the cast/setting/related entries selected in UI or proposed by the Provenance LLM; `derived_from` = explicit fork/continue lineage chosen in the UI (**trusted structure** — the controller honours it directly; content is still moderated). Empty `derived_from` ⇒ a brand-new root.
 - **CanonEntry**: `id, type(character|location|beast|spell|faction|plot|lore), title, body,
   contributor_id, derived_from(list[canon_id]), references(list[canon_id]), version, created_at,
   map_meta`. `map_meta` is set **only for locations**, written by the Cartographer node via the
@@ -284,7 +284,7 @@ data-model change — the store is unchanged; the compose endpoint just hands th
 - `GET /canon/{id}` → generic entity detail (lore, related entities, storylines it appears in).
 - `POST /discover` → clears fog on a node for the caller (idempotent).
 - `POST /contribute` (extended) → `type` now includes `beast|spell`; accepts `derived_from`
-  and `references`. Lineage is applied by the controller, not inferred by the Provenance LLM.
+  and `references`. Lineage (`derived_from`) is applied by the controller based on user input, not inferred by the Provenance LLM (which only proposes soft `references`).
 
 ## Content & safety policy (Moderation/Safety agent)
 Runs **before** anything is written to canon, and **re-checks the Narrator's final

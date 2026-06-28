@@ -68,7 +68,7 @@ flowchart LR
 1. **Intake / Router** — classifies the contribution type and normalizes free text into a typed `Contribution`.
 2. **Moderation (GATE)** — deterministic + LLM safety checks; blocks disallowed content, prompt injection, and hidden payloads (acrostics, zero-width chars, base64/hex). Halts the pipeline on `BLOCK`.
 3. **Continuity** — checks the contribution against the canon store for contradictions; halts inconsistent contributions.
-4. **Provenance** — detects lineage (what existing canon this builds on) and proposes `derived_from` edges.
+4. **Provenance** — detects references (what existing canon this builds on) and proposes soft reference links.
 5. **Scoring / Critic** — scores creativity / consistency / build-on and proposes a points delta for the simulated ledger economy.
 6. **Narrator / Synthesis** — drafts the "what changed in the world" canon entry and **re-moderates its own generated summary** before proposing the write.
 7. **Cartographer** — for spatial contributions, proposes a `region`, an `{x, y}` map position, and `near` links. **Users never place pins; the world self-assembles from lore.**
@@ -177,7 +177,7 @@ they haven't discovered stay shrouded.
 | Intake / Router | ingest | Classify + normalize into a typed `Contribution` | No (proposal only) |
 | Moderation | ingest | Safety GATE; halts on `BLOCK` | No |
 | Continuity | ingest | Detect canon contradictions | No |
-| Provenance | ingest | Propose `derived_from` lineage edges | No |
+| Provenance | ingest | Propose soft reference links | No |
 | Scoring | ingest | Score creativity/consistency/build-on | No |
 | Narrator | ingest | Draft + self-moderate the canon entry | No |
 | Cartographer | ingest | Propose region + `{x,y}` + `near` links | No |
