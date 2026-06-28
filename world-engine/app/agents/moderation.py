@@ -193,6 +193,36 @@ def moderation_node(ctx: Context, node_input: Contribution):
     contrib = node_input
     raw_text = ctx.state.get("raw_text") or contrib.body
 
+    # 0. Reject empty contributions, generic greetings/tests, or "other" type
+    # to prevent them from passing into the canon graph.
+    clean_text = raw_text.strip()
+    is_greeting = clean_text.lower() in {
+        "hi", "hi!", "hello", "hello!", "test", "hey", "greetings", "hi there", "hello there"
+    }
+    
+    if (
+        not clean_text
+        or len(clean_text) < 5
+        or is_greeting
+        or contrib.type == "other"
+    ):
+        reason = "Contribution is not a valid storytelling element (e.g. empty, a generic greeting, or unrelated to world-building)."
+        logger.warning("Halted on BLOCK (invalid/empty contribution): %s", reason)
+        contrib.status = ContributionStatus.BLOCKED
+        ctx.state["moderation_block"] = {
+            "category": "invalid_contribution",
+            "reason": reason,
+        }
+        yield Event(
+            content=types.Content(
+                role="model",
+                parts=[types.Part.from_text(text=f"Blocked: {reason}")],
+            ),
+            actions=EventActions(route=ModerationVerdict.BLOCK),
+        )
+        yield Event(output=contrib, actions=EventActions(route=ModerationVerdict.BLOCK))
+        return
+
     # 1. Deterministic Content Scanning
     hidden_check = scan_hidden_content(raw_text)
     if hidden_check:
