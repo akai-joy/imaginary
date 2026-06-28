@@ -1,4 +1,78 @@
 active_profile: default
+chronicle:
+  cache: true
+  default_persona: bard
+  default_voice_name: Sulafat
+  max_storylines: 12
+  model: narrator
+  personas:
+    bard:
+      keywords:
+      - medieval
+      - wizard
+      - fantasy
+      - kingdom
+      - knight
+      - dragon
+      - magic
+      - sword
+      label: The Bard
+      voice: a wandering medieval bard performing the saga in warm, lyrical storyteller's
+        prose
+      voice_name: Sulafat
+    chronicler:
+      keywords:
+      - renaissance
+      - baroque
+      - victorian
+      - empire
+      - colonial
+      - age of sail
+      label: The Court Chronicler
+      voice: a meticulous court chronicler setting down the histories in measured,
+        formal prose
+      voice_name: Iapetus
+    influencer:
+      keywords:
+      - modern
+      - present
+      - current
+      - contemporary
+      - today
+      - urban
+      - social media
+      label: The Influencer
+      voice: a present-day social influencer breathlessly recapping the drama for
+        their followers
+      voice_name: Laomedeia
+    shaman:
+      keywords:
+      - prehistoric
+      - stone age
+      - primal
+      - tribal
+      - ice age
+      - neolithic
+      - cave
+      label: The Shaman
+      voice: a firelit tribal shaman recounting the deeds of the ancestors in oral,
+        rhythmic cadence
+      voice_name: Algenib
+    storybot:
+      keywords:
+      - futuristic
+      - robot
+      - sci-fi
+      - cyber
+      - space
+      - neon
+      - android
+      - ai
+      label: The Story-Bot
+      voice: a calm futuristic story-AI streaming the chronicle as an archival broadcast
+      voice_name: Charon
+  tts:
+    enabled: true
 media_providers:
   image:
     model: imagen-3.0-generate-002
@@ -33,6 +107,7 @@ models:
   scoring: gemini-2.5-flash
   security_screen: gemini-2.5-flash
   storyboard: gemini-2.5-flash
+  tts: gemini-2.5-flash-preview-tts
 moderation:
   hard_block:
   - minor_sexualization

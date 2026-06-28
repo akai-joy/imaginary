@@ -5,6 +5,7 @@ import {
   mockShowcase,
   DEMO,
   mockWorld,
+  mockChronicle,
   mockMap,
   mockCodex,
   mockCanon,
@@ -13,6 +14,18 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 export const apiMock = !API_BASE
+
+// Resolve a backend asset URL (map tiles, chronicle audio, etc.) for the browser.
+// The DB stores absolute `http://localhost:8000/...` URLs; we reduce those to the
+// bare path and re-root them at the API origin. In production the UI is served by
+// the backend so API_BASE is '' → a same-origin relative path; in cross-origin dev
+// API_BASE is the backend URL → an absolute path that actually resolves (instead of
+// hitting the Vite dev server, which has no /cache or /gcs_mock and 404s).
+export function assetUrl(url) {
+  if (!url) return ''
+  const path = url.replace(/^https?:\/\/[^/]+/, '')
+  return `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`
+}
 
 // In-memory copy so demo votes + discoveries persist for the session.
 const mockState = {
@@ -121,6 +134,13 @@ export function useApi() {
         if (apiMock) return mockWorld
         return realOrDemo('/world', async () =>
           request('/world', { token: await getToken() }), () => mockWorld)
+      },
+
+      // GET /world/chronicle -> { persona, persona_label, chronicle_text } (the world's own voice)
+      async getChronicle() {
+        if (apiMock) return mockChronicle
+        return realOrDemo('/world/chronicle', async () =>
+          request('/world/chronicle', { token: await getToken() }), () => mockChronicle)
       },
 
       // GET /codex/:kind -> CanonEntry[] (kind = characters|beasts|spells)

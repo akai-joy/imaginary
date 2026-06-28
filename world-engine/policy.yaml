@@ -20,6 +20,7 @@ models:
   narrator:        gemini-pro
   storyboard:      gemini-pro
   security_screen: gemini-flash-lite     # cheap pre-screen; NOT the only defense
+  tts:             gemini-2.5-flash-preview-tts   # Gemini native TTS (chronicle voice-over)
 
 # ---------------------------------------------------------------------------
 # Content & safety (Moderation node)
@@ -55,6 +56,53 @@ scoring:
   weights: { creativity: 0.4, consistency: 0.3, build_on: 0.3 }
   range: [0, 100]                        # controller CLAMPS proposals to this range
   points_multiplier: 1                   # ledger points = clamped_score * multiplier
+
+# ---------------------------------------------------------------------------
+# Chronicle: the world's own storyteller voice ("what we know so far").
+#
+# Read-only, on-demand synthesis over the world's storylines. The narrator is
+# the SAME role every age — the keeper-and-teller of the people's stories — but
+# the FORM that role takes shifts with the era the world evokes: firelit shaman,
+# wandering bard, present-day influencer. Selection is a cheap keyword match on
+# the world's free-text `theme`; no genre enum, no LLM persona inference.
+# ---------------------------------------------------------------------------
+chronicle:
+  model: narrator              # reuse the narrator model role (gemini-pro synthesis)
+  cache: true                  # cache by (world_id, canon_count); story count changes -> regen
+  max_storylines: 12           # cap input breadth so synthesis stays cheap + on-tempo
+  default_persona: bard        # fallback when no era keyword matches the theme
+  tts:
+    enabled: true              # synthesize the chronicle once, cache the audio, attach audio_url
+  # First persona whose keywords appear in the lowercased world theme wins.
+  # `voice` shapes the LLM prose AND the TTS delivery style; `voice_name` is the
+  # Gemini prebuilt TTS voice chosen to fit the era's teller.
+  personas:
+    shaman:
+      label: "The Shaman"
+      keywords: [prehistoric, stone age, primal, tribal, ice age, neolithic, cave]
+      voice: "a firelit tribal shaman recounting the deeds of the ancestors in oral, rhythmic cadence"
+      voice_name: Algenib       # gravelly, grave — an elder at the fire
+    bard:
+      label: "The Bard"
+      keywords: [medieval, wizard, fantasy, kingdom, knight, dragon, magic, sword]
+      voice: "a wandering medieval bard performing the saga in warm, lyrical storyteller's prose"
+      voice_name: Sulafat       # warm, performing
+    chronicler:
+      label: "The Court Chronicler"
+      keywords: [renaissance, baroque, victorian, empire, colonial, age of sail]
+      voice: "a meticulous court chronicler setting down the histories in measured, formal prose"
+      voice_name: Iapetus       # clear, measured
+    influencer:
+      label: "The Influencer"
+      keywords: [modern, present, current, contemporary, today, urban, social media]
+      voice: "a present-day social influencer breathlessly recapping the drama for their followers"
+      voice_name: Laomedeia     # upbeat, breathless
+    storybot:
+      label: "The Story-Bot"
+      keywords: [futuristic, robot, sci-fi, cyber, space, neon, android, ai]
+      voice: "a calm futuristic story-AI streaming the chronicle as an archival broadcast"
+      voice_name: Charon        # calm, informative broadcast
+  default_voice_name: Sulafat   # used when a matched persona has no voice_name
 
 # ---------------------------------------------------------------------------
 # Showcase subgraph: trigger + deliberate cost control

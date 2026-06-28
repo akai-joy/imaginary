@@ -229,6 +229,21 @@ def get_world(authorization: str | None = Header(None)):
     }
 
 
+@app.get("/world/chronicle")
+def get_world_chronicle(authorization: str | None = Header(None)):
+    """GET /world/chronicle -> the active world's storyteller synthesis.
+
+    Read-only "what we know so far": the same chronicler role, voiced in the form
+    the world's era evokes (shaman / bard / influencer / story-bot). Cached by
+    world + canon count in the chronicler module, so re-opening the panel is instant.
+    """
+    from app.agents.chronicler import build_chronicle
+
+    store = get_store()
+    active_w = store.get_world(active_world_id()) or store.get_world(DEFAULT_WORLD_ID) or SEED_WORLD
+    return build_chronicle(active_w, store)
+
+
 @app.get("/codex/{kind}")
 def get_codex(kind: str, authorization: str | None = Header(None)):
     kind_to_type = {
@@ -816,7 +831,7 @@ def get_scene(scene_id: str):
     if not entry:
         raise HTTPException(status_code=404, detail="Scene/Canon entry not found")
 
-    if scene_id in ("canon_alistair", "canon_10254e4f-2552-4528-aa24-5fb891f200a8", "canon_10072aa0-ccd9-4bca-875b-9399a501efc2", "canon_86cfa3fe-c56d-4fda-a066-469d40eb7cf0", "canon_eldoria", "eldoria"):
+    if scene_id in ("canon_alistair", "canon_10254e4f-2552-4528-aa24-5fb891f200a8", "canon_10072aa0-ccd9-4bca-875b-9399a501efc2", "canon_86cfa3fe-c56d-4fda-a066-469d40eb7cf0", "canon_eldoria", "eldoria", "canon_drk", "canon_pia"):
         # Custom override for the Alistair / Elynar storyline matching the custom video assets
         choices = []
         canon_entries = store.list_canon_entries()
@@ -974,6 +989,30 @@ def get_scene(scene_id: str):
                     "durationMs": 5200
                 }
             ]
+        elif scene_id == "canon_drk": # The Slagmaw Drake
+            panels = [
+                {
+                    "id": "drk_p1",
+                    "prompt": "Close-up of the Slagmaw Drake nesting in cooling iron, eyes glowing, breath crackling.",
+                    "caption": "The Slagmaw Drake nests in cooling iron, its breath crackling as it swallows oaths whole.",
+                    "imageUrl": None,
+                    "videoUrl": "http://localhost:8000/gcs_mock/world-engine-showcase/the_slagmaw_drake.mp4",
+                    "audioUrl": None,
+                    "durationMs": 5200
+                }
+            ]
+        elif scene_id == "canon_pia": # Pia, the Chronicler of Lantern Row
+            panels = [
+                {
+                    "id": "pia_p1",
+                    "prompt": "Pia the chronicler writing in her book under the warm streetlamps of Lantern Row.",
+                    "caption": "Pia sits under the amber streetlamps of Lantern Row, capturing the histories of the world.",
+                    "imageUrl": "http://localhost:8000/cache/pia_the_chronicler.jpg",
+                    "videoUrl": None,
+                    "audioUrl": None,
+                    "durationMs": 5200
+                }
+            ]
         else: # Alistair's Protege, Elynar
             panels = [
                 {
@@ -1097,11 +1136,20 @@ def get_scene(scene_id: str):
             })
     else:
         # Fallback panel from the entry itself if no storyboard match or job is not yet run
+        image_url = None
+        entry_type = entry.type.value if hasattr(entry.type, "value") else entry.type
+        if entry_type == "location":
+            assets = store.list_media_assets()
+            tile_assets = [a for a in assets if a.kind == "map_tile" and a.node_id == entry.id]
+            if tile_assets:
+                latest_tile = max(tile_assets, key=lambda a: a.created_at)
+                image_url = latest_tile.gcs_url
+
         panels.append({
             "id": f"{scene_id}_fallback",
             "prompt": f"Illustration of {entry.title}: {entry.body}",
             "caption": entry.body,
-            "imageUrl": None,
+            "imageUrl": image_url,
             "videoUrl": None,
             "audioUrl": None,
             "durationMs": 5200

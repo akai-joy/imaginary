@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApi } from '../api'
 import LoreDrawer from '../components/LoreDrawer'
+import ChronicleDrawer from '../components/ChronicleDrawer'
 import ComposerDrawer from '../components/ComposerDrawer'
 
 // Stable 0..1 hash from a string so a given id always lands in the same spot.
@@ -41,6 +42,8 @@ const clampZoom = (z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
 export default function WorldMap() {
   const api = useApi()
   const [map, setMap] = useState(null)
+  const [chronicle, setChronicle] = useState(null)
+  const [showChronicle, setShowChronicle] = useState(false)
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
   const [hovered, setHovered] = useState(null)
@@ -57,6 +60,14 @@ export default function WorldMap() {
     api.getMap().then(setMap).catch((e) => setError(e.message))
   }, [api])
   useEffect(() => { load() }, [load])
+
+  // The world's own voice — loaded once, independently of the map (it's cached
+  // server-side by world + story count, so this is cheap on re-open).
+  useEffect(() => {
+    let alive = true
+    api.getChronicle().then((c) => alive && setChronicle(c)).catch(() => {})
+    return () => { alive = false }
+  }, [api])
 
   useEffect(() => {
     const el = viewportRef.current
@@ -152,6 +163,18 @@ export default function WorldMap() {
             <button className="atlas-zoom-btn" onClick={() => zoomBy(0.83)} aria-label="Zoom out">−</button>
             <button className="atlas-zoom-btn" onClick={reset} aria-label="Reset view">⟳</button>
           </div>
+
+          {chronicle?.chronicle_text && (
+            <button
+              type="button"
+              className="chronicle-trigger"
+              onClick={(e) => { e.stopPropagation(); setShowChronicle(true) }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <span className="ct-mark">❧</span>
+              <span className="ct-label">Let {chronicle.persona_label} catch you up on the world</span>
+            </button>
+          )}
 
           <div
             className="atlas-stage"
@@ -249,6 +272,10 @@ export default function WorldMap() {
           <span className="frontier">drag to roam · scroll to zoom · hover a beacon</span>
         </div>
       </div>
+
+      {showChronicle && (
+        <ChronicleDrawer chronicle={chronicle} onClose={() => setShowChronicle(false)} />
+      )}
 
       {selected && (
         <LoreDrawer

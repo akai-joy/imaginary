@@ -108,6 +108,23 @@ export const mockWorld = {
   closes_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 + 14 * 60 * 60 * 1000).toISOString(),
 }
 
+// The world's storyteller synthesis ("what we know so far"). Persona shifts with the
+// world's era; the demo world is medieval, so the Bard tells it.
+export const mockChronicle = {
+  persona: 'bard',
+  persona_label: 'The Bard',
+  chronicle_text:
+    'Gather close, and hear how the world unspun: when the last spell guttered out at dusk, ' +
+    'every wizard who felt it die began to run — and their running drew the map you see. ' +
+    'The Slag Court rose where the fleeing made their bargain, the Drowned Coast remembers ' +
+    'what they cast away, and in the Hollow North the magic still waits, unspent. ' +
+    'Each tale you add becomes another verse I must learn to sing.',
+  // Null in offline demo — the play button only appears against the real backend,
+  // which generates + caches the Gemini-TTS voice-over and returns its URL.
+  audio_url: null,
+  canon_count: 28,
+}
+
 // Locations placed by the Cartographer on a 0–100 plane. `discovered` is per-user fog state.
 export const mockMap = {
   world: mockWorld,
