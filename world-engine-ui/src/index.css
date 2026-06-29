@@ -699,7 +699,7 @@ button { font-family: inherit; cursor: pointer; }
   width: 100%;
   max-width: 1680px;
   margin: 0 auto;
-  height: 82vh;
+  height: 86vh;
   min-height: 560px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -722,6 +722,21 @@ button { font-family: inherit; cursor: pointer; }
   aspect-ratio: 1 / 1;
   transform-origin: center center;
   will-change: transform;
+}
+/* Faint aged-parchment world map, oversized so it bleeds past the square into the
+   frame voids. It lives INSIDE .atlas-stage, so it pans + zooms as one with the
+   charted region. Warm filter + soft edge-fade blend it into the candlelit theme;
+   the fog square + lantern pools sit above it as the illuminated "known region". */
+.atlas-worldmap {
+  position: absolute;
+  inset: -70%;
+  z-index: 0;
+  pointer-events: none;
+  background: url('/map_background.jpg') center center / cover no-repeat;
+  opacity: 0.55;
+  filter: sepia(0.32) saturate(0.78) brightness(0.6) contrast(1.02);
+  -webkit-mask-image: radial-gradient(closest-side, #000 78%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 78%, transparent 100%);
 }
 .atlas-controls {
   position: absolute;

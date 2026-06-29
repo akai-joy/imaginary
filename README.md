@@ -170,6 +170,22 @@ they haven't discovered stay shrouded.
 
 ---
 
+## The Chronicle — the world narrates itself
+
+Beyond *browsing* the canon, the world **tells you its story so far**. `GET /world/chronicle` runs a
+**read-only synthesis** over the active world's storyline trees and returns a short, spoken-aloud
+*"what we know so far"* recap — in the voice of a storyteller whose **form shifts with the world's
+era**: a firelit **shaman** for a primal world, a wandering **bard** for medieval fantasy, a
+present-day **influencer**, a **story-bot** for sci-fi. The persona is chosen by a cheap keyword
+match on the world's `theme` (no extra model call), the prose is generated **once and cached**, and a
+**Gemini TTS** voice-over (a per-persona prebuilt voice) is synthesized once and attached as
+`audio_url` — so the UI's "Hear the Bard" button plays it instantly. Canon read back for the
+synthesis is spotlight-wrapped as untrusted, exactly like the ingest Narrator. Personas and voices
+live under `chronicle:` in `policy.yaml`. It's the same "tie the separate threads together" idea the
+Narrator does internally — now offered to the reader (or an external agent) as the world's own voice.
+
+---
+
 ## Agent roster
 
 | Agent | Workflow | Role | Side effects? |
@@ -260,9 +276,10 @@ cd world-engine
 uv run uvicorn app.fast_api_app:app --reload   # http://localhost:8000
 ```
 
-Front-end endpoints include `GET /world/map`, `GET /canon/storylines`,
-`GET /canon/storylines/{treeId}`, `GET /scenes/{id}`, `POST /vote`, `GET /showcase`, and
-`POST /contribute` (runs the ingest pipeline synchronously).
+Front-end endpoints include `GET /world`, `GET /world/map`, `GET /world/chronicle`,
+`GET /codex/{kind}`, `GET /canon/storylines`, `GET /canon/storylines/{treeId}`, `GET /canon/{id}`,
+`GET /scenes/{id}`, `POST /discover`, `POST /vote`, `GET /showcase`, and `POST /contribute`
+(runs the ingest pipeline synchronously).
 
 ### Front end (`cd world-engine-ui`)
 

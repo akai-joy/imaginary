@@ -246,6 +246,15 @@ war** that clears around discovered places, with clean markers and a single **ho
 (tile thumbnail + lore snippet + Explore) — never stacked cards on the map. `MediaAsset` carries
 `node_id`/`world_id`; `World` carries `map_image_url`/`map_image_version`.
 
+**The Chronicle (the world narrates itself).** `GET /world/chronicle` runs a **read-only synthesis**
+over the active world's storyline trees and returns a short "what we know so far" recap in the voice
+of a storyteller whose **form shifts with the world's era** — shaman / bard / court chronicler /
+influencer / story-bot, chosen by a cheap keyword match on the world's `theme` (no extra model call).
+The prose is generated **once and cached**; a **Gemini TTS** voice-over (per-persona prebuilt voice)
+is synthesized once and attached as `audio_url` for instant playback. It is read-only and reuses the
+Narrator's spotlighting — canon read back for the synthesis is treated as **untrusted**. Personas +
+voices live under `chronicle:` in `policy.yaml` (`app/agents/chronicler.py`).
+
 **Planned next (not yet built — agreed for follow-up):**
 - **Min-distance spacing (Poisson-disc).** The Cartographer/controller must reject placements
   within a per-type minimum distance of existing locations so markers never overlap (fixes
@@ -285,6 +294,19 @@ data-model change — the store is unchanged; the compose endpoint just hands th
 - `POST /discover` → clears fog on a node for the caller (idempotent).
 - `POST /contribute` (extended) → `type` now includes `beast|spell`; accepts `derived_from`
   and `references`. Lineage (`derived_from`) is applied by the controller based on user input, not inferred by the Provenance LLM (which only proposes soft `references`).
+- `GET /world/chronicle` → the active world's storyteller synthesis (`persona`, `persona_label`, `chronicle_text`, cached `audio_url`). See "The Chronicle" above.
+
+## MCP server (read-only world access)
+`app/mcp_server.py` exposes the living world over the **Model Context Protocol** so any MCP client
+(Claude Desktop, the MCP Inspector, an external author agent) can read the **living manuscript**
+without being part of the graph. Five read-only tools, all on the same `CanonStore`:
+`get_world_state()` (world / season), `get_codex(kind?)` (world bible), `get_story(tree_id?)`
+(storyline trees → ordered chapters), and `get_lore_context(query)` + `check_continuity(statement)`
+(grounding). It is **read-only by construction** — there is no write tool, because the only path that
+can mutate canon is the deterministic controller. The Proposal→Controller trust boundary therefore
+holds at the protocol surface too: an external client can read the whole world but can never corrupt
+it or bypass moderation. The same read path is what a future season-finale **book compiler** will
+consume. Serve over stdio with `uv run python -m app.mcp_server`.
 
 ## Content & safety policy (Moderation/Safety agent)
 Runs **before** anything is written to canon, and **re-checks the Narrator's final

@@ -180,6 +180,8 @@ export default function WorldMap() {
             className="atlas-stage"
             style={{ transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})` }}
           >
+            <div className="atlas-worldmap" aria-hidden="true" />
+
             {canvasUrl && (
               <img className="atlas-canvas" src={canvasUrl} alt="" draggable="false"
                 onError={(e) => { e.currentTarget.style.display = 'none' }} />

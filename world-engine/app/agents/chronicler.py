@@ -258,22 +258,56 @@ Generate a structured JSON response matching the ChronicleResponse schema.
 Storylines so far:
 {wrapped}"""
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ChronicleResponse,
-            temperature=0.8,
-        ),
-    )
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ChronicleResponse,
+                temperature=0.8,
+            ),
+        )
+        data = ChronicleResponse.model_validate_json(response.text)
+        chronicle_text = data.chronicle_text
+        audio_url = synthesize_chronicle_audio(chronicle_text, persona, config)
+    except Exception as e:
+        logger.error("Failed to generate chronicle from Gemini API (429/billing): %s", e)
+        # 1. Fallback text:
+        story_titles = [s['title'] for s in stories]
+        if len(story_titles) > 1:
+            chronicle_text = (
+                f"Gather close, and hear the tale of {world.theme}: we speak of "
+                + ", ".join(story_titles[:-1]) + f", and {story_titles[-1]}."
+                + f" {world.opening_line} Each story is a new verse."
+            )
+        elif len(story_titles) == 1:
+            chronicle_text = (
+                f"Gather close, and hear the tale of {world.theme}: we speak of {story_titles[0]}."
+                + f" {world.opening_line} Each story is a new verse."
+            )
+        else:
+            chronicle_text = (
+                f"Gather close, and hear the tale of {world.theme}. "
+                + f"{world.opening_line} The map of the world is waiting for your pen."
+            )
 
-    data = ChronicleResponse.model_validate_json(response.text)
+        # 2. Try to salvage a cached audio file from disk!
+        import glob
+        import os
+        wav_files = glob.glob(os.path.join("cache", "*.wav"))
+        audio_url = None
+        if wav_files:
+            latest_file = max(wav_files, key=os.path.getmtime)
+            rel_path = os.path.relpath(latest_file)
+            audio_url = _cache_url(rel_path)
+            logger.info("Fell back to cached chronicle audio on disk: %s", audio_url)
+
     result = {
         "persona": persona_key,
         "persona_label": persona_label,
-        "chronicle_text": data.chronicle_text,
-        "audio_url": synthesize_chronicle_audio(data.chronicle_text, persona, config),
+        "chronicle_text": chronicle_text,
+        "audio_url": audio_url,
         "canon_count": canon_count,
     }
     if cache_on:

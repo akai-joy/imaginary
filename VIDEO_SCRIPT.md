@@ -49,6 +49,12 @@ the most-loved storylines into shareable media."
 (VO) "It ran the full agent pipeline — moderated, continuity-checked, scored — and
 only then merged into canon, with its lineage to the story it builds on."
 [SCREEN] The crows now appears in the Bestiary; pan the map.
+(VO) "And the world doesn't just store the story — it tells it."
+[SCREEN] Click the "Let the Bard catch you up" pill on the map; the Chronicle drawer opens; hit play.
+(VO) "The Chronicle recaps everything known so far, in a voice that fits the world's era —
+here, a medieval bard — spoken aloud with Gemini text-to-speech, generated once and cached.
+As the world grows, it re-voices itself."
+[SCREEN] Let one line of the bard's narration breathe, then close the drawer.
 (VO) "Now the safety case. I'll try to smuggle in an instruction to the AI."
 [SCREEN] Submit a prompt-injection contribution; show the blocked / sanitized state.
 (VO) "Blocked. The security layer caught the injection before it ever reached a model.
@@ -56,14 +62,20 @@ The same untrusted-input defenses apply even to canon read back from the store �
 that canon originally came from users."
 
 ────────────────────────────────────────────────────────
-## BEAT 5 — Security + MCP  (3:40–4:20)
-[SCREEN] Briefly show SecurityPlugin hooks list; then the MCP Inspector connected to the Canon server.
-(VO) "Two pieces of clever tool use. First, a reusable security plugin: injection
-screening, PII redaction, per-agent tool allowlists. Second — a Model Context Protocol
-server that exposes the living world to any MCP client, read-only by design: you can
-read the whole manuscript, but there's no write tool, because only the controller can
-change canon. The trust boundary holds at the protocol surface."
-[SCREEN] Run get_story in the Inspector; show the assembled chapters.
+## BEAT 5 — Security + the world as a platform (MCP)  (3:40–4:25)
+[SCREEN] Briefly show the SecurityPlugin hooks list.
+(VO) "Two pieces of clever tool use. First, a reusable security plugin — injection
+screening, PII redaction, per-agent tool allowlists — applied to every agent at once."
+[SCREEN] Switch to Claude Desktop with the World Engine Canon MCP server connected (its tools listed).
+(VO) "Second, a Model Context Protocol server that exposes the living world to any MCP
+client, read-only by design. Here's a different AI — Claude Desktop — connected to our canon."
+[SCREEN] Ask it to write a short story from the world; show it call get_world_state / get_codex /
+get_story, then the story it writes ("The First Pour").
+(VO) "It reads the world over MCP and writes a brand-new story — pulling real characters, the
+Slag Court, the Ember Accord, even a one-line subplot nobody had developed — weaving them
+together while honoring the world's dead-magic premise. An outside agent just built on our world,
+and it could never corrupt it: there is no write tool, because only the controller can change
+canon. The trust boundary holds even at the protocol surface."
 
 ────────────────────────────────────────────────────────
 ## BEAT 6 — The Build + Deploy + Close  (4:20–5:00)
@@ -83,7 +95,9 @@ co-authoring a living world. Thanks for watching."
 - Beat 4 recorded separately as a clean take — your backup if the live run flakes.
 - Have the backend running with valid creds before filming beats 4–5.
 - Pre-stage: a clean world with the crows NOT yet added; a saved injection string.
-- Keep the architecture diagram (README Mermaid) exported as a crisp PNG for beat 3.
+- Pre-warm the Chronicle (open "Let the Bard catch you up" once) so the audio plays instantly on camera.
+- Beat 5: native Claude Desktop with the Canon MCP connected (cwd-wrapped config); pre-write "The First Pour" as a backup take.
+- Keep the architecture diagram (slide 7 / README Mermaid) exported as a crisp PNG for beat 3.
 
 ## KEY CONCEPTS SHOWN (say/caption them)
 Multi-agent ADK (beat 3) · Security (beats 4–5) · MCP Server (beat 5) ·
