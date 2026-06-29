@@ -3,7 +3,6 @@ import { useApi } from '../api'
 import LoreDrawer from '../components/LoreDrawer'
 import ChronicleDrawer from '../components/ChronicleDrawer'
 import ComposerDrawer from '../components/ComposerDrawer'
-import BackgroundMusic from '../components/BackgroundMusic'
 
 // Stable 0..1 hash from a string so a given id always lands in the same spot.
 function hash01(str, salt) {
@@ -298,8 +297,6 @@ export default function WorldMap() {
           onSuccess={load}
         />
       )}
-
-      <BackgroundMusic />
     </>
   )
 }
