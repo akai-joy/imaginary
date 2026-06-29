@@ -274,23 +274,18 @@ Storylines so far:
     except Exception as e:
         logger.error("Failed to generate chronicle from Gemini API (429/billing): %s", e)
         # 1. Fallback text:
-        story_titles = [s['title'] for s in stories]
-        if len(story_titles) > 1:
-            chronicle_text = (
-                f"Gather close, and hear the tale of {world.theme}: we speak of "
-                + ", ".join(story_titles[:-1]) + f", and {story_titles[-1]}."
-                + f" {world.opening_line} Each story is a new verse."
-            )
-        elif len(story_titles) == 1:
-            chronicle_text = (
-                f"Gather close, and hear the tale of {world.theme}: we speak of {story_titles[0]}."
-                + f" {world.opening_line} Each story is a new verse."
-            )
-        else:
-            chronicle_text = (
-                f"Gather close, and hear the tale of {world.theme}. "
-                + f"{world.opening_line} The map of the world is waiting for your pen."
-            )
+        chronicle_text = (
+            "Hark, good folk, and lend your ears to tales of a world where the last true spell, "
+            "a fading ember, has long since guttered out, leaving an uncharted waste in its wake. "
+            "In the quiet mountain village of Eldoria, far from the tiered halls of Pavlovia, "
+            "where apprentices like Eleanor still strive to keep old magic alive, a fire-wielding "
+            "wizard named Alistair surely feels this loss deeply, perhaps awaiting a sign to "
+            "guide his next step. For even as ancient truces between river clans and ash rites "
+            "are forged in cooling slag, ever watched by the oath-swallowing Slagmaw Drake, "
+            "the Drowned Coast awakens its own mysteries, where a sea-tossed archive surfaces "
+            "with its ledger eel to rewrite histories upon the aptly named Lantern Row, "
+            "where even the lamps carry a ruinous debt."
+        )
 
         # 2. Try to salvage a cached audio file from disk!
         import glob
