@@ -130,6 +130,7 @@ def get_user_id_from_token(authorization: str | None, strict: bool = False) -> s
 # --- REST API Endpoints for the Front-End ---
 
 def active_world_id() -> str:
+    """Resolve which world to serve: advance the lifecycle, else fall back to the newest world (or the default seed)."""
     from app.core.lifecycle import tick
     store = get_store()
     w = tick(store)
@@ -144,6 +145,7 @@ def active_world_id() -> str:
 
 @app.get("/world/map")
 def get_world_map(authorization: str | None = Header(None)):
+    """GET /world/map -> the active world plus its locations (coords, regions, painted tile URLs) with per-user fog-of-war state."""
     store = get_store()
     user_id = get_user_id_from_token(authorization)
     active_w_id = active_world_id()
@@ -208,6 +210,7 @@ def get_world_map(authorization: str | None = Header(None)):
 
 @app.get("/world")
 def get_world(authorization: str | None = Header(None)):
+    """GET /world -> the active world summary (theme, opening line, status, and time remaining in the drop)."""
     store = get_store()
     from app.core.lifecycle import is_window_open, seconds_remaining, tick
     tick(store)
@@ -246,6 +249,7 @@ def get_world_chronicle(authorization: str | None = Header(None)):
 
 @app.get("/codex/{kind}")
 def get_codex(kind: str, authorization: str | None = Header(None)):
+    """GET /codex/{kind} -> the codex index grid for one entry type (characters|beasts|spells), tagged with per-user discovery flags."""
     kind_to_type = {
         "characters": "character",
         "beasts": "beast",
@@ -282,6 +286,7 @@ class DiscoverPayload(BaseModel):
 
 @app.post("/discover")
 def post_discover(payload: DiscoverPayload, authorization: str | None = Header(None)):
+    """POST /discover -> clear fog-of-war on a canon node for the calling user (idempotent)."""
     user_id = get_user_id_from_token(authorization)
     store = get_store()
     store.save_discovery(user_id, payload.canon_id)
@@ -428,6 +433,7 @@ def get_storyline(treeId: str, authorization: str | None = Header(None)):
 
 
 def is_local_dev() -> bool:
+    """True when running locally (no GCP project / Cloud Run), so async work runs inline instead of via Cloud Tasks."""
     local_dev_env = os.getenv("WORLD_ENGINE_LOCAL_DEV")
     if local_dev_env is not None:
         return local_dev_env.upper() == "TRUE"
@@ -435,6 +441,7 @@ def is_local_dev() -> bool:
 
 
 def enqueue_showcase_task(tree_id: str):
+    """Enqueue the showcase workflow for a tree on Cloud Tasks (the production async path)."""
     import json
 
     from google.cloud import tasks_v2
@@ -474,6 +481,7 @@ def enqueue_showcase_task(tree_id: str):
 
 
 def enqueue_atlas_task(location_id: str):
+    """Enqueue the async Atlas-illustration workflow for a location on Cloud Tasks (the production async path)."""
     import json
 
     from google.cloud import tasks_v2
@@ -513,6 +521,7 @@ def enqueue_atlas_task(location_id: str):
 
 
 def trigger_atlas_task(location_id: str):
+    """Fire the Atlas illustration for a location: inline in local dev, via Cloud Tasks in the cloud."""
     if is_local_dev():
         def run_atlas_async():
             try:
@@ -549,6 +558,7 @@ def trigger_atlas_task(location_id: str):
 # {id} route does not shadow those more specific paths (FastAPI matches in order).
 @app.get("/canon/{id}")
 def get_canon_detail(id: str, authorization: str | None = Header(None)):
+    """GET /canon/{id} -> full entity detail (lore, related entities, storylines it appears in); opening it discovers the node."""
     store = get_store()
     user_id = get_user_id_from_token(authorization)
     entry = store.get_canon_entry(id)
@@ -757,6 +767,7 @@ class ScheduleWorldPayload(BaseModel):
 
 @app.post("/internal/world/schedule")
 def post_internal_world_schedule(payload: ScheduleWorldPayload, authorization: str | None = Header(None)):
+    """POST /internal/world/schedule -> open/schedule a new themed world drop (internal admin hook)."""
     _user_id = get_user_id_from_token(authorization)
     store = get_store()
 
@@ -788,6 +799,7 @@ def post_internal_world_schedule(payload: ScheduleWorldPayload, authorization: s
 
 @app.post("/internal/tick")
 def post_internal_tick(authorization: str | None = Header(None)):
+    """POST /internal/tick -> advance the world lifecycle (close expired drops); internal cron hook."""
     store = get_store()
     from app.core.lifecycle import tick
     w = tick(store)
@@ -801,6 +813,7 @@ def post_internal_tick(authorization: str | None = Header(None)):
 
 
 def get_media_urls_for_scene(scene, media_type: str) -> tuple[str | None, str | None]:
+    """Resolve cached comic/reel asset URLs for a storyboard scene by hashing its generation prompt (None until generated)."""
     import hashlib
     prompt = scene.optimized_prompt if scene.optimized_prompt else scene.visual_description
     if not prompt:
@@ -1393,6 +1406,7 @@ class PaintAtlasPayload(BaseModel):
 
 @app.post("/internal/paint-atlas")
 def post_internal_paint_atlas(payload: PaintAtlasPayload):
+    """POST /internal/paint-atlas -> run the Atlas illustrator for a location (internal Cloud Tasks callback)."""
     store = get_store()
     entry = store.get_canon_entry(payload.location_id)
     if not entry:
