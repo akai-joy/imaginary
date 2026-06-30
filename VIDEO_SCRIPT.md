@@ -101,4 +101,5 @@ co-authoring a living world. Thanks for watching."
 
 ## KEY CONCEPTS SHOWN (say/caption them)
 Multi-agent ADK (beat 3) · Security (beats 4–5) · MCP Server (beat 5) ·
-Deployability (beat 6) · Antigravity (beat 6). → 5 of 6, well past the required 3.
+Agent skills / Agents CLI (beat 6) · Deployability (beat 6) · Antigravity (beat 6).
+→ all 6 of 6, well past the required 3.

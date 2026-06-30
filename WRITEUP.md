@@ -86,6 +86,15 @@ clamps and commits it; an Atlas Illustrator paints a tile and composites it into
 candlelit, fog-of-war master map. Users never place pins — the world self-assembles from
 the lore the crowd writes.
 
+### The Chronicle — the world narrates itself
+
+The world doesn't just *store* its story — it **tells** it. A read-only synthesis
+(`GET /world/chronicle`) weaves the active world's separate storylines into a short
+"what we know so far" recap, in the voice of a storyteller whose **form shifts with the
+world's era** — a medieval bard, a primal shaman, a present-day influencer — read aloud with
+**Gemini TTS** (generated once and cached). It's the same "tie the threads together" job the
+Narrator does internally, surfaced to the reader as the world's own voice.
+
 ## Safety and security (the core of the build)
 
 Because every downstream agent reads untrusted, user-submitted text, this is the
@@ -119,6 +128,14 @@ manuscript — world state, codex, and the story so far — through five tools, 
 write tool by design**. Since the only path that can mutate canon is the deterministic
 controller, the Proposal→Controller trust boundary is enforced even at the protocol
 surface: read everything, corrupt nothing.
+
+We demonstrated this end-to-end: a *different* model — **Claude Desktop, connected to the
+canon over MCP** — read the world and wrote a brand-new, canon-faithful short story ("The
+First Pour"), pulling real characters, the Slag Court, the Ember Accord, the oath-eating
+Slagmaw Drake, and even a one-line subplot nobody had developed — while honoring the world's
+dead-magic premise. An outside agent built *on* the world without being able to corrupt it:
+the clearest proof that World Engine is a safe, read-only **platform** other agents can create
+against.
 
 ## Evaluation
 
@@ -180,14 +197,16 @@ prototype-first in the local playground before anything touched the cloud.
 | Deployability | Dockerfile + Terraform → Cloud Run; SQLite ↔ Firestore |
 | Antigravity | the system was built with Antigravity / Gemini |
 
-**5 of 6 key concepts — well past the required 3.**
+**All 6 key concepts demonstrated — well past the required 3.**
 
 ## What's novel
 
 The combination: provenance-tracked collaborative fiction; a "proof-of-creativity"
 scoring model that rewards downstream reuse rather than posting volume; a
 security-first multi-agent design where untrusted user content passes through eight
-agents without ever being trusted; and a world that literally draws itself.
+agents without ever being trusted; a world that literally draws *and narrates* itself; and an
+MCP surface that turns the finished world into a safe **platform** an outside agent can author
+against.
 
 ## Value, economy & rewards (the vision this is built for)
 
