@@ -292,32 +292,39 @@ export default function WorldMap() {
             </svg>
 
             {/* Fog of war: opaque mist with feathered clear holes at discovered places. */}
+            {/* Sized to fully cover the parchment underlay (inset:-70%) and then some,
+                so no lit parchment ever peeks out past the fog into the frame; the
+                fog-dark meets the near-black viewport background with no visible seam. */}
             <svg
               className="atlas-fog"
-              viewBox="-50 -50 200 200"
+              viewBox="-150 -150 400 400"
               preserveAspectRatio="none"
               style={{
                 position: 'absolute',
-                left: '-50%',
-                top: '-50%',
-                width: '200%',
-                height: '200%',
+                left: '-150%',
+                top: '-150%',
+                width: '400%',
+                height: '400%',
               }}
             >
               <defs>
-                <radialGradient id="fogHole">
-                  <stop offset="0%" stopColor="#000" />
-                  <stop offset="45%" stopColor="#000" />
-                  <stop offset="100%" stopColor="#fff" />
-                </radialGradient>
+                {/* Feather the UNION of all holes, not each circle: solid black
+                    discs merge seamlessly (overlaps stay fully cleared, no internal
+                    rim), then one blur softens only the merged outer boundary. */}
+                <filter id="fogFeather" filterUnits="userSpaceOnUse"
+                  x="-150" y="-150" width="400" height="400">
+                  <feGaussianBlur stdDeviation="6" />
+                </filter>
                 <mask id="fogMask">
-                  <rect x="-50" y="-50" width="200" height="200" fill="#fff" />
-                  {discovered.map((l) => (
-                    <circle key={l.id} cx={l.x} cy={l.y} r="28" fill="url(#fogHole)" />
-                  ))}
+                  <rect x="-150" y="-150" width="400" height="400" fill="#fff" />
+                  <g filter="url(#fogFeather)">
+                    {discovered.map((l) => (
+                      <circle key={l.id} cx={l.x} cy={l.y} r="20" fill="#000" />
+                    ))}
+                  </g>
                 </mask>
               </defs>
-              <rect x="-50" y="-50" width="200" height="200" fill="#0f1013" opacity="0.94" mask="url(#fogMask)" />
+              <rect x="-150" y="-150" width="400" height="400" fill="#0f1013" opacity="0.94" mask="url(#fogMask)" />
             </svg>
 
             {/* Charted lantern pools: the location's painted tile, above the fog. */}
