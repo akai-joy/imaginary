@@ -12,10 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
+
+
+def _utcnow() -> datetime:
+    """Naive UTC timestamp — the store compares/persists naive UTC throughout."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
 
 # Every world-scoped entity (Contribution, CanonEntry, Vote, ShowcaseJob) carries a
 # `world_id`. Until multi-world wiring lands everything defaults to the seed world, so
@@ -42,11 +48,11 @@ class World(BaseModel):
     art_style_directive: str = ""
     moderation_profile: str = "default"
     status: WorldStatus = WorldStatus.ACTIVE
-    opens_at: datetime = Field(default_factory=datetime.utcnow)
+    opens_at: datetime = Field(default_factory=_utcnow)
     # None = open-ended (the seed/demo world has no hard deadline). A real drop is
     # time-boxed — that scarcity is the event energy.
     closes_at: datetime | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
     map_image_url: str | None = None
     map_image_version: int = 1
 
@@ -94,7 +100,7 @@ class Contribution(BaseModel):
     type: ContributionType
     title: str
     body: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
     status: ContributionStatus = ContributionStatus.PENDING
     # `references` = cast/setting the contributor selected; `derived_from` = explicit
     # fork/continue lineage chosen in the UI. Both are trusted structure applied by the
@@ -122,7 +128,7 @@ class CanonEntry(BaseModel):
     derived_from: list[str] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
     version: int = 1
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
     # Set only for locations, by the Cartographer node (never by a user).
     map_meta: MapMeta | None = None
 
@@ -132,7 +138,7 @@ class Discovery(BaseModel):
 
     user_id: str
     canon_id: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class LedgerEntry(BaseModel):
@@ -140,7 +146,7 @@ class LedgerEntry(BaseModel):
     author_id: str
     points_delta: int
     reason: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class ShowcaseJobStatus(StrEnum):
@@ -158,7 +164,7 @@ class Vote(BaseModel):
     world_id: str = DEFAULT_WORLD_ID
     tree_id: str
     weight: float = 1.0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class StorylineTree(BaseModel):
@@ -197,7 +203,7 @@ class ShowcaseJob(BaseModel):
     tree_id: str
     media_type: str  # "comic" or "reel"
     status: ShowcaseJobStatus = ShowcaseJobStatus.QUEUED
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
     storyboard_json: str | None = None
 
 
@@ -210,6 +216,6 @@ class MediaAsset(BaseModel):
     caption: str
     hashtags: list[str] = Field(default_factory=list)
     contributor_ids: list[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
     node_id: str = ""
     world_id: str = ""

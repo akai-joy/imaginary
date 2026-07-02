@@ -146,7 +146,7 @@ def get_world_state() -> dict:
         return {"active": False, "message": "No active world."}
 
     closes_at = _naive_utc(world.closes_at)
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     time_remaining = (
         max(0, int((closes_at - now).total_seconds())) if closes_at else None
     )
