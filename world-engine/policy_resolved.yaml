@@ -17,9 +17,10 @@ chronicle:
       - magic
       - sword
       label: The Bard
-      voice: a wandering medieval bard performing the saga in warm, lyrical storyteller's
-        prose
-      voice_name: Sulafat
+      voice: "a wandering medieval bard performing the saga in warm, lyrical storyteller's\
+        \ prose, spoken at full conversational volume with clear open-air projection\
+        \ \u2014 never whispered, hushed, or breathy"
+      voice_name: Charon
     chronicler:
       keywords:
       - renaissance

@@ -85,8 +85,8 @@ chronicle:
     bard:
       label: "The Bard"
       keywords: [medieval, wizard, fantasy, kingdom, knight, dragon, magic, sword]
-      voice: "a wandering medieval bard performing the saga in warm, lyrical storyteller's prose"
-      voice_name: Sulafat       # warm, performing
+      voice: "a wandering medieval bard performing the saga in warm, lyrical storyteller's prose, spoken at full conversational volume with clear open-air projection — never whispered, hushed, or breathy"
+      voice_name: Charon        # deep, informative timbre; style prompt keeps it at full voice
     chronicler:
       label: "The Court Chronicler"
       keywords: [renaissance, baroque, victorian, empire, colonial, age of sail]
