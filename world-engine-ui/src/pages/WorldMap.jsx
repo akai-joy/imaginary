@@ -209,7 +209,6 @@ export default function WorldMap() {
 
   const byId = Object.fromEntries(locations.map((l) => [l.id, l]))
   const discovered = locations.filter((l) => l.discovered)
-  const canvasUrl = getCleanUrl(map.world?.map_image_url)
   const hoveredLoc = hovered ? byId[hovered] : null
 
   return (
@@ -261,10 +260,26 @@ export default function WorldMap() {
           >
             <div className="atlas-worldmap" aria-hidden="true" />
 
-            {canvasUrl && (
-              <img className="atlas-canvas" src={canvasUrl} alt="" draggable="false"
-                onError={(e) => { e.currentTarget.style.display = 'none' }} />
-            )}
+            {/* Ambient candlelit light pools illuminating the parchment underlay at discovered places */}
+            {discovered.map((l) => (
+              <div
+                key={`light-${l.id}`}
+                className="place-light"
+                style={{
+                  position: 'absolute',
+                  left: `${l.x}%`,
+                  top: `${l.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width: '40%',
+                  height: '40%',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle, rgba(245, 158, 11, 0.16) 0%, rgba(245, 158, 11, 0.05) 50%, transparent 100%)',
+                  pointerEvents: 'none',
+                  zIndex: 1,
+                  mixBlendMode: 'color-dodge',
+                }}
+              />
+            ))}
 
             <svg className="atlas-roads" viewBox="0 0 100 100" preserveAspectRatio="none">
               {locations.flatMap((l) =>
@@ -277,21 +292,32 @@ export default function WorldMap() {
             </svg>
 
             {/* Fog of war: opaque mist with feathered clear holes at discovered places. */}
-            <svg className="atlas-fog" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <svg
+              className="atlas-fog"
+              viewBox="-50 -50 200 200"
+              preserveAspectRatio="none"
+              style={{
+                position: 'absolute',
+                left: '-50%',
+                top: '-50%',
+                width: '200%',
+                height: '200%',
+              }}
+            >
               <defs>
                 <radialGradient id="fogHole">
                   <stop offset="0%" stopColor="#000" />
-                  <stop offset="55%" stopColor="#000" />
+                  <stop offset="45%" stopColor="#000" />
                   <stop offset="100%" stopColor="#fff" />
                 </radialGradient>
                 <mask id="fogMask">
-                  <rect x="0" y="0" width="100" height="100" fill="#fff" />
+                  <rect x="-50" y="-50" width="200" height="200" fill="#fff" />
                   {discovered.map((l) => (
-                    <circle key={l.id} cx={l.x} cy={l.y} r="23" fill="url(#fogHole)" />
+                    <circle key={l.id} cx={l.x} cy={l.y} r="28" fill="url(#fogHole)" />
                   ))}
                 </mask>
               </defs>
-              <rect x="0" y="0" width="100" height="100" fill="#1b1d22" opacity="0.9" mask="url(#fogMask)" />
+              <rect x="-50" y="-50" width="200" height="200" fill="#0f1013" opacity="0.94" mask="url(#fogMask)" />
             </svg>
 
             {/* Charted lantern pools: the location's painted tile, above the fog. */}
