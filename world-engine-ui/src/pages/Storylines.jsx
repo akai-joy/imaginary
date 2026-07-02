@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../api'
-import Thread from '../components/Thread'
 import VoteButton from '../components/VoteButton'
+
+// Folio numbering for the table of contents.
+const ROMAN = [[100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]
+function roman(n) {
+  let s = ''
+  for (const [v, r] of ROMAN) while (n >= v) { s += r; n -= v }
+  return s
+}
 
 export default function Storylines() {
   const api = useApi()
@@ -41,21 +48,27 @@ export default function Storylines() {
 
   return (
     <div className="page">
-      <header className="page-head">
+      <header className="page-head reveal" style={{ '--i': 0 }}>
+        <div className="page-kicker">❦ the chronicle, in order of renown</div>
         <h1>Storylines</h1>
         <p className="page-sub">Branches of the world, ranked by how much they’re loved and built upon.</p>
       </header>
 
-      <ul className="story-list">
-        {items.map((s) => (
-          <li key={s.tree_id} className="story-card">
-            <Thread branched={Boolean(s.derived_from)} tall />
-            <div className="story-body">
-              <div className="story-top">
-                <Link to={`/story/${s.tree_id}`} className="story-title">{s.title}</Link>
-                <span className={`tag tag-${s.type}`}>{s.type}</span>
+      {/* An illuminated table of contents: each storyline is a folio entry whose
+          dotted leader runs out to its backing tally, the way a contents page
+          leads to a page number. */}
+      <ol className="toc">
+        {items.map((s, i) => (
+          <li key={s.tree_id} className="toc-entry reveal" style={{ '--i': i + 1 }}>
+            <span className="toc-num" aria-hidden="true">{roman(i + 1)}</span>
+            <div className="toc-body">
+              <div className="toc-line">
+                <Link to={`/story/${s.tree_id}`} className="toc-title">{s.title}</Link>
+                <span className={`toc-type tag-${s.type}`}>{s.type}</span>
+                <span className="toc-leader" aria-hidden="true" />
+                <VoteButton treeId={s.tree_id} initialTotal={s.vote_total} initialVoted={s.voted} />
               </div>
-              <p className="story-summary">{s.summary}</p>
+              <p className="toc-summary">{s.summary}</p>
               <p className="meta">
                 <span>v{s.version}</span>
                 <span className="dot">·</span>
@@ -70,10 +83,9 @@ export default function Storylines() {
                 )}
               </p>
             </div>
-            <VoteButton treeId={s.tree_id} initialTotal={s.vote_total} initialVoted={s.voted} />
           </li>
         ))}
-      </ul>
+      </ol>
     </div>
   )
 }

@@ -10,6 +10,11 @@ const KINDS = [
   { slug: 'spells', label: 'Grimoire', rune: '✶', blurb: 'The workings that bend it.', type: 'spell' },
 ]
 
+function letterIcon(title) {
+  const l = (title || '')[0]?.toUpperCase()
+  return /^[A-Z]$/.test(l || '') ? new URL(`../../assets/img/${l}_icon.png`, import.meta.url).href : null
+}
+
 export default function Codex() {
   const api = useApi()
   const { kind = 'characters' } = useParams()
@@ -66,7 +71,11 @@ export default function Codex() {
               style={{ '--i': i + 2 }}
               onClick={() => setSelected(e.id)}
             >
-              <span className="cc-rune">{meta.rune}</span>
+              <span className="cc-rune">
+                {kind === 'characters' && e.discovered && letterIcon(e.title)
+                  ? <img className="cc-letter" src={letterIcon(e.title)} alt="" />
+                  : meta.rune}
+              </span>
               <h3 className="cc-title">{e.discovered ? e.title : 'Sealed entry'}</h3>
               <p className="cc-body">{e.body}</p>
               {e.discovered && <p className="cc-by">scribed by {e.contributor_id}</p>}

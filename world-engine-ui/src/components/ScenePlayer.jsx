@@ -94,7 +94,6 @@ function PanelVisual({ panel, index, playing, videoRef, onLayout }) {
         ref={videoRef}
         className={`stage-media ${kb}`}
         src={panel.videoUrl}
-        muted={Boolean(panel.audioUrl)}
         playsInline
         preload="auto"
         onLoadedMetadata={(e) => {
@@ -220,7 +219,7 @@ function PlayerStage({ scene, onChoose, breadcrumb }) {
       return;
     }
     const dur = panel.durationMs || 5200;
-    const audio = panel.audioUrl ? audioRef.current : null;
+    const audio = voiceoverEnabled && panel.audioUrl ? audioRef.current : null;
     const video = panel.videoUrl ? videoRef.current : null;
 
     if (video) video.play().catch(() => {});

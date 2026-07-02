@@ -214,6 +214,65 @@ button { font-family: inherit; cursor: pointer; }
 .story-title:hover { color: var(--plum); }
 .story-summary { margin: 6px 0 0; color: var(--ink-soft); }
 
+/* ---------- Storylines: illuminated table of contents ---------- */
+/* No cards: folio numerals, dotted leaders running out to the backing tally,
+   hairline rules between entries — a contents page, not a feed. */
+.page-kicker {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--gold); margin-bottom: 10px;
+}
+.toc {
+  list-style: none; margin: 0; padding: 0;
+  border-top: 3px double color-mix(in srgb, var(--gold) 40%, transparent);
+}
+.toc-entry {
+  display: flex; gap: 20px; padding: 24px 4px 22px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+}
+.toc-num {
+  flex: none; min-width: 38px; text-align: right; padding-top: 7px;
+  font-family: var(--display); font-size: 13px; letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--gold) 80%, var(--ink-soft));
+}
+.toc-body { flex: 1; min-width: 0; }
+.toc-line { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.toc-title {
+  font-family: var(--display); font-size: 21px; font-weight: 600;
+  letter-spacing: 0.01em; text-decoration: none; color: var(--ink);
+  transition: color 0.15s;
+}
+.toc-title:hover { color: var(--gold); }
+/* Type as an ink annotation, not a pill (tag-* classes supply the per-type color). */
+.toc-type { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+.toc-leader {
+  flex: 1; min-width: 48px; align-self: flex-end; margin-bottom: 6px;
+  border-bottom: 1px dotted color-mix(in srgb, var(--gold) 32%, transparent);
+}
+.toc-summary {
+  margin: 8px 0 0; max-width: 66ch;
+  font-family: var(--serif); font-size: 15px; line-height: 1.6; color: var(--ink-soft);
+}
+/* The backing tally at the end of the leader — a ledger figure, not a button box. */
+.toc .vote { text-align: right; }
+.toc .vote-btn {
+  flex-direction: row; align-items: baseline; gap: 8px;
+  min-width: 0; padding: 0 2px 2px;
+  background: none; border: none; border-bottom: 1px solid transparent; border-radius: 0;
+  color: var(--gold);
+  transition: color 0.15s, border-color 0.15s;
+}
+.toc .vote-btn:hover:not(:disabled) { background: none; color: #ffe9ae; border-bottom-color: color-mix(in srgb, var(--gold) 55%, transparent); }
+.toc .vote-count { font-family: var(--display); font-size: 19px; font-weight: 600; }
+.toc .vote-count::before { content: '✦ '; font-size: 12px; }
+.toc .vote-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; margin: 0; }
+.toc .vote-btn.is-voted { background: none; border: none; color: var(--ochre); opacity: 0.85; }
+
+@media (max-width: 640px) {
+  .toc-entry { gap: 12px; }
+  .toc-leader { display: none; }
+  .toc .vote { margin-left: auto; }
+}
+
 /* ---------- Vote ---------- */
 .vote { flex: none; text-align: center; }
 .vote-btn {
@@ -970,36 +1029,82 @@ button { font-family: inherit; cursor: pointer; }
 .compose-context .cc-clear:hover { color: var(--plum); }
 
 /* ---------- Codex (Characters / Bestiary / Grimoire) ---------- */
-.codex-tabs { display: flex; gap: 8px; margin: 0 0 26px; flex-wrap: wrap; }
+/* A manuscript folio spread, not a card grid: rubric band tabs, ragged CSS-column
+   folios with gold versal initials, hairline rules instead of boxes. */
+.codex-tabs {
+  display: flex; flex-wrap: wrap; margin: 0 0 36px;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
 .codex-tab {
-  font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--ink-soft); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px;
-  transition: all 0.15s;
+  position: relative; text-decoration: none;
+  font-family: var(--display); font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-soft); background: none; border: none; padding: 13px 24px;
+  transition: color 0.15s;
 }
-.codex-tab:hover { color: var(--ink); border-color: var(--ink-soft); }
-.codex-tab.active { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 50%, transparent); background: color-mix(in srgb, var(--gold) 8%, transparent); }
-.codex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
+.codex-tab + .codex-tab { border-left: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.codex-tab:hover { color: var(--ink); }
+.codex-tab.active { color: var(--gold); }
+.codex-tab.active::after {
+  content: ''; position: absolute; left: 20px; right: 20px; bottom: -2px;
+  border-bottom: 3px double var(--gold); opacity: 0.8;
+}
+.codex-grid { columns: 280px 3; column-gap: 46px; }
+.codex-grid > .muted { column-span: all; }
 .codex-card {
-  position: relative; text-align: left; cursor: pointer;
-  background: linear-gradient(180deg, var(--surface-2), var(--surface));
-  border: 1px solid var(--line); border-radius: 6px; padding: 18px; overflow: hidden;
-  transition: transform .18s, border-color .18s, box-shadow .18s;
+  position: relative; display: block; width: 100%; break-inside: avoid;
+  text-align: left; cursor: pointer;
+  background: none; border: none; border-radius: 0;
+  padding: 16px 4px 24px; margin: 0 0 6px;
+  transition: background 0.2s;
 }
-.codex-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: .5; }
-.codex-card:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--gold) 45%, transparent); box-shadow: 0 12px 34px rgba(0,0,0,.5); }
-.cc-rune { font-family: var(--display); font-size: 30px; color: var(--gold); opacity: .9; text-shadow: 0 0 18px color-mix(in srgb, var(--gold) 45%, transparent); }
+.codex-card:hover {
+  background: radial-gradient(120% 90% at 18% 0%, color-mix(in srgb, var(--gold) 7%, transparent), transparent 65%);
+}
+/* Rune sits at the head of each folio with a rule trailing off like an underscribe's line. */
+.cc-rune {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--display); font-size: 15px;
+  color: color-mix(in srgb, var(--gold) 70%, var(--ink-soft));
+}
+.cc-letter { width: 22px; height: 22px; object-fit: contain; }
+.cc-rune::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 32%, transparent), transparent);
+  transition: background 0.2s;
+}
+.codex-card:hover .cc-rune { color: var(--gold); }
+.codex-card:hover .cc-rune::after { background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 70%, transparent), transparent); }
 /* Card is a <button> (dark UA default text) -> set an explicit bright title color. */
-.cc-title { font-family: var(--display); font-size: 18px; font-weight: 600; margin: 12px 0 0; letter-spacing: .02em; color: var(--ink); }
-.cc-body { font-family: var(--serif); color: var(--ink-soft); font-size: 14px; margin: 8px 0 0; line-height: 1.55; }
-.cc-by { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); margin-top: 14px; }
+.cc-title { font-family: var(--display); font-size: 17px; font-weight: 600; margin: 12px 0 0; letter-spacing: .05em; color: var(--ink); transition: color 0.15s; }
+.codex-card:hover .cc-title { color: var(--gold); }
+.cc-body {
+  font-family: var(--serif); color: var(--ink-soft); font-size: 14px; margin: 8px 0 0; line-height: 1.6;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* Illuminated versal: the folio's first letter in gold leaf. */
+.cc-body::first-letter {
+  font-family: var(--display); font-size: 30px; line-height: 0.85;
+  float: left; color: var(--gold); padding: 3px 7px 0 0;
+}
+.cc-by { font-family: var(--serif); font-style: italic; font-size: 12.5px; color: var(--ink-soft); text-align: right; margin-top: 12px; }
+.cc-by::before { content: '— '; }
 .codex-card.is-fog .cc-title, .codex-card.is-fog .cc-body { filter: blur(4px); opacity: .55; user-select: none; }
 .codex-card.is-fog .cc-rune { color: var(--ink-soft); }
+.codex-card.is-fog .cc-rune::after { background: linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 30%, transparent), transparent); }
+/* Sealed folio: a wax seal over the veiled text. */
 .cc-lock {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft);
   background: radial-gradient(circle at 50% 50%, transparent, rgba(8,7,5,.35));
 }
-.cc-lock .lk { font-size: 18px; color: var(--gold); opacity: .8; }
+.cc-lock .lk {
+  display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%;
+  font-size: 19px; color: #e8c64f; transform: rotate(-8deg);
+  background: radial-gradient(circle at 35% 30%, #8a3140, #57202b 72%);
+  box-shadow: inset 0 2px 5px rgba(255, 235, 200, 0.18), inset 0 -3px 6px rgba(0, 0, 0, 0.5), 0 4px 14px rgba(0, 0, 0, 0.55);
+  transition: transform 0.2s;
+}
+.codex-card.is-fog:hover .cc-lock .lk { transform: rotate(-2deg) scale(1.06); }
 .codex-card.is-fog:hover .cc-title, .codex-card.is-fog:hover .cc-body { filter: blur(2px); }
 
 @media (max-width: 760px) {
