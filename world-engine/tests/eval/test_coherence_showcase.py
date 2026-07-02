@@ -227,8 +227,9 @@ def test_aggregate_coherence_and_showcase(temp_store, monkeypatch):
     print("\n[Step 5] Triggering Showcase Subgraph...")
     # Force ledger entries to have high scores (e.g. 90) to pass the min_composite_score threshold of 70
     import sqlite3
+    from contextlib import closing
 
-    with sqlite3.connect(temp_store.db_path) as conn:
+    with closing(sqlite3.connect(temp_store.db_path)) as conn, conn:
         conn.execute(
             "DELETE FROM ledger_entries WHERE contribution_id IN (?, ?)",
             (contrib_a.id, contrib_b.id),

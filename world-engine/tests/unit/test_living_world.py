@@ -16,6 +16,7 @@
 import os
 import sqlite3
 import tempfile
+from contextlib import closing
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
@@ -112,7 +113,7 @@ def test_self_healing_migration_on_legacy_db():
     os.close(fd)
     try:
         # Simulate an OLD database: canon_entries without references_json / map_meta_json
-        with sqlite3.connect(path) as conn:
+        with closing(sqlite3.connect(path)) as conn, conn:
             conn.execute("""
                 CREATE TABLE canon_entries (
                     id TEXT PRIMARY KEY, type TEXT NOT NULL, title TEXT NOT NULL,

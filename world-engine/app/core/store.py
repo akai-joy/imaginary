@@ -16,7 +16,9 @@ import json
 import re
 import sqlite3
 from abc import ABC, abstractmethod
+from contextlib import closing
 from datetime import UTC, datetime
+from functools import lru_cache
 
 from app.core.types import (
     DEFAULT_WORLD_ID,
@@ -168,8 +170,15 @@ class SQLiteCanonStore(CanonStore):
         self.db_path = db_path
         self._init_db()
 
+    def _connect(self) -> sqlite3.Connection:
+        # sqlite3's context manager only commits/rolls back — it never closes, so
+        # every call site pairs this with closing() to avoid leaking connections.
+        return sqlite3.connect(self.db_path, timeout=15)
+
     def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
+            # WAL is persistent in the db file; readers no longer block on writers.
+            conn.execute("PRAGMA journal_mode=WAL")
             cursor = conn.cursor()
             # Worlds table (themed seasonal drops). Every other entity is scoped to a world.
             cursor.execute("""
@@ -379,7 +388,7 @@ class SQLiteCanonStore(CanonStore):
 
     # --- Worlds (themed seasonal drops) ---
     def save_world(self, world: World) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO worlds (
@@ -404,7 +413,7 @@ class SQLiteCanonStore(CanonStore):
             conn.commit()
 
     def save_world_map_image(self, world_id: str, url: str, version: int) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute(
                 "UPDATE worlds SET map_image_url = ?, map_image_version = ? WHERE id = ?",
                 (url, version, world_id),
@@ -412,7 +421,7 @@ class SQLiteCanonStore(CanonStore):
             conn.commit()
 
     def get_world(self, world_id: str) -> World | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"SELECT {self._WORLD_COLS} FROM worlds WHERE id = ?", (world_id,)
@@ -421,7 +430,7 @@ class SQLiteCanonStore(CanonStore):
             return self._row_to_world(row) if row else None
 
     def list_worlds(self) -> list[World]:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"SELECT {self._WORLD_COLS} FROM worlds ORDER BY opens_at DESC"
@@ -429,7 +438,7 @@ class SQLiteCanonStore(CanonStore):
             return [self._row_to_world(row) for row in cursor.fetchall()]
 
     def get_active_world(self) -> World | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"SELECT {self._WORLD_COLS} FROM worlds WHERE status = ? "
@@ -441,7 +450,7 @@ class SQLiteCanonStore(CanonStore):
 
     # --- Contributions (raw user submissions) ---
     def save_contribution(self, contribution: Contribution) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -464,7 +473,7 @@ class SQLiteCanonStore(CanonStore):
             conn.commit()
 
     def get_contribution(self, contribution_id: str) -> Contribution | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -512,7 +521,7 @@ class SQLiteCanonStore(CanonStore):
 
     # --- Canon entries (accepted, versioned lore) ---
     def save_canon_entry(self, entry: CanonEntry) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -538,7 +547,7 @@ class SQLiteCanonStore(CanonStore):
             conn.commit()
 
     def get_canon_entry(self, entry_id: str) -> CanonEntry | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"SELECT {self._CANON_COLS} FROM canon_entries WHERE id = ?",
@@ -551,7 +560,7 @@ class SQLiteCanonStore(CanonStore):
 
     # --- Ledger (simulated points economy) ---
     def save_ledger_entry(self, entry: LedgerEntry) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -570,7 +579,7 @@ class SQLiteCanonStore(CanonStore):
             conn.commit()
 
     def get_ledger_entries(self, author_id: str) -> list[LedgerEntry]:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -592,7 +601,7 @@ class SQLiteCanonStore(CanonStore):
             ]
 
     def list_canon_entries(self, world_id: str | None = None) -> list[CanonEntry]:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             if world_id is None:
                 cursor.execute(f"SELECT {self._CANON_COLS} FROM canon_entries")
@@ -606,7 +615,7 @@ class SQLiteCanonStore(CanonStore):
     def list_canon_entries_by_type(
         self, entry_type: str, world_id: str | None = None
     ) -> list[CanonEntry]:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             if world_id is None:
                 cursor.execute(
@@ -629,7 +638,7 @@ class SQLiteCanonStore(CanonStore):
         if not words:
             return self.list_canon_entries(world_id)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             sql = f"SELECT {self._CANON_COLS} FROM canon_entries WHERE "
             conditions = []
@@ -647,7 +656,7 @@ class SQLiteCanonStore(CanonStore):
 
     # --- Discoveries (per-user fog-of-war) ---
     def save_discovery(self, user_id: str, canon_id: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO discoveries (user_id, canon_id, created_at)
@@ -658,7 +667,7 @@ class SQLiteCanonStore(CanonStore):
             conn.commit()
 
     def list_discoveries(self, user_id: str) -> set[str]:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT canon_id FROM discoveries WHERE user_id = ?", (user_id,)
@@ -667,7 +676,7 @@ class SQLiteCanonStore(CanonStore):
 
     # --- Votes (one per user per storyline tree) ---
     def save_vote(self, vote: Vote) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -687,7 +696,7 @@ class SQLiteCanonStore(CanonStore):
             conn.commit()
 
     def get_votes_for_tree(self, tree_id: str) -> list[Vote]:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -711,7 +720,7 @@ class SQLiteCanonStore(CanonStore):
 
     # --- Showcase jobs (async media generation) ---
     def save_showcase_job(self, job: ShowcaseJob) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -732,7 +741,7 @@ class SQLiteCanonStore(CanonStore):
             conn.commit()
 
     def get_showcase_job(self, job_id: str) -> ShowcaseJob | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -755,7 +764,7 @@ class SQLiteCanonStore(CanonStore):
             )
 
     def list_showcase_jobs(self, world_id: str | None = None) -> list[ShowcaseJob]:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             base = (
                 "SELECT id, world_id, tree_id, media_type, status, created_at, "
@@ -780,7 +789,7 @@ class SQLiteCanonStore(CanonStore):
             ]
 
     def get_points_for_contribution(self, contribution_id: str) -> int:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -793,7 +802,7 @@ class SQLiteCanonStore(CanonStore):
 
     # --- Media assets (generated comics/reels/tiles) ---
     def save_media_asset(self, asset: MediaAsset) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -818,7 +827,7 @@ class SQLiteCanonStore(CanonStore):
             conn.commit()
 
     def list_media_assets(self) -> list[MediaAsset]:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -1198,6 +1207,7 @@ class FirestoreCanonStore(CanonStore):
         return results
 
 
+@lru_cache(maxsize=1)
 def get_store() -> CanonStore:
     """Returns either a Firestore or SQLite CanonStore depending on the environment.
 
@@ -1205,6 +1215,9 @@ def get_store() -> CanonStore:
     requested (``USE_FIRESTORE=True``). Using Vertex AI for the LLM
     (``GOOGLE_GENAI_USE_VERTEXAI=True``) does NOT force Firestore, so local dev can run
     Vertex models against the local SQLite ``world.db``.
+
+    Cached: on Firestore this avoids rebuilding the client (and re-running the
+    seed-world check) on every call. Env-based selection is read once per process.
     """
     import os
 

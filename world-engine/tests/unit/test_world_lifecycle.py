@@ -16,6 +16,7 @@
 import os
 import sqlite3
 import tempfile
+from contextlib import closing
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
@@ -214,7 +215,7 @@ def test_self_healing_migration_adds_world_id_to_legacy_tables():
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     try:
-        with sqlite3.connect(path) as conn:
+        with closing(sqlite3.connect(path)) as conn, conn:
             # Pre-Living-World canon_entries (no world_id, no references/map_meta)
             conn.execute("""
                 CREATE TABLE canon_entries (
