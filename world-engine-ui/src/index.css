@@ -772,7 +772,7 @@ button { font-family: inherit; cursor: pointer; }
   mask-image: radial-gradient(120% 120% at 50% 50%, #000 55%, transparent 95%);
 }
 .atlas-roads { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-.atlas-road { stroke: color-mix(in srgb, var(--gold) 38%, transparent); stroke-width: 0.4; stroke-dasharray: 1.4 1.2; fill: none; }
+.atlas-road { stroke: color-mix(in srgb, var(--gold) 38%, transparent); stroke-width: calc(0.4px * var(--inv, 1)); stroke-dasharray: 1.4 1.2; fill: none; }
 
 /* The master map canvas the Atlas agent paints into (Phase 2 backdrop). */
 .atlas-canvas {
@@ -800,7 +800,9 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .place {
-  position: absolute; transform: translate(-50%, -50%); z-index: 3;
+  /* --inv (set on .atlas-stage) counter-scales annotations so pins/labels stay
+     constant-size and crisp while the world zooms under them. */
+  position: absolute; transform: translate(-50%, -50%) scale(var(--inv, 1)); z-index: 3;
   display: flex; flex-direction: column; align-items: center; gap: 7px;
   background: none; border: none; cursor: pointer; width: max-content; max-width: 160px;
 }
@@ -840,7 +842,10 @@ button { font-family: inherit; cursor: pointer; }
 /* Single hover card (markers stay clean; one card at a time). */
 .place-card {
   position: absolute; z-index: 4;
-  transform: translate(14px, -110%);
+  /* Counter-scaled about its anchor point; .flip-x/.flip-y keep it inside the frame
+     when the hovered place sits near the right/top edge. */
+  transform-origin: top left;
+  transform: scale(var(--inv, 1)) translate(14px, -110%);
   width: 260px; display: flex; gap: 12px; padding: 12px;
   background: linear-gradient(180deg, var(--surface-2), var(--surface));
   border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);

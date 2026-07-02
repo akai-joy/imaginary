@@ -117,7 +117,9 @@ class _FakeModels:
     def generate_content(self, model, contents, config):
         self._capture["prompt"] = contents
         self._capture["model"] = model
-        return _FakeResponse('{"chronicle_text": "Gather close: the spell died and the world ran."}')
+        return _FakeResponse(
+            '{"chronicle_text": "Gather close: the spell died and the world ran."}'
+        )
 
 
 class _FakeClient:
@@ -125,7 +127,9 @@ class _FakeClient:
         self.models = _FakeModels(capture)
 
 
-def test_chronicle_synthesises_and_wraps_canon_as_untrusted(temp_store, monkeypatch, no_tts):
+def test_chronicle_synthesises_and_wraps_canon_as_untrusted(
+    temp_store, monkeypatch, no_tts
+):
     w = _seed_world(temp_store)
     temp_store.save_canon_entry(
         CanonEntry(
@@ -228,18 +232,27 @@ def test_tts_generated_once_then_served_from_disk_cache(monkeypatch, tmp_path):
         def generate_content(model, contents, config):
             calls["n"] += 1
             # The chosen voice is actually threaded into the request.
-            assert config.speech_config.voice_config.prebuilt_voice_config.voice_name == "Sulafat"
+            assert (
+                config.speech_config.voice_config.prebuilt_voice_config.voice_name
+                == "Sulafat"
+            )
             return _fake_audio_response(pcm)
 
-        return SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+        return SimpleNamespace(
+            models=SimpleNamespace(generate_content=generate_content)
+        )
 
     monkeypatch.setattr(chronicler.genai, "Client", _client)
 
     persona = {"voice_name": "Sulafat", "voice": "a wandering bard"}
     config = {"tts": {"enabled": True}}
 
-    url1 = chronicler.synthesize_chronicle_audio("A singular and unique tale.", persona, config)
-    url2 = chronicler.synthesize_chronicle_audio("A singular and unique tale.", persona, config)
+    url1 = chronicler.synthesize_chronicle_audio(
+        "A singular and unique tale.", persona, config
+    )
+    url2 = chronicler.synthesize_chronicle_audio(
+        "A singular and unique tale.", persona, config
+    )
 
     assert url1 and url1.endswith(".wav")
     assert url1 == url2
@@ -261,3 +274,58 @@ def test_tts_disabled_returns_none_without_calling_model(monkeypatch):
         "text", {"voice_name": "Sulafat"}, {"tts": {"enabled": False}}
     )
     assert out is None
+
+
+def test_synthesize_speech_and_caching(monkeypatch, tmp_path):
+    # Redirect the shared asset cache so the test writes into a temp dir.
+    monkeypatch.setattr("app.agents.media.CACHE_DIR", str(tmp_path))
+
+    pcm = b"\x10\x00\x20\x00" * 2000  # arbitrary 16-bit PCM
+    calls = {"n": 0}
+
+    def _client():
+        def generate_content(model, contents, config):
+            calls["n"] += 1
+            assert (
+                config.speech_config.voice_config.prebuilt_voice_config.voice_name
+                == "Sulafat"
+            )
+            return _fake_audio_response(pcm)
+
+        return SimpleNamespace(
+            models=SimpleNamespace(generate_content=generate_content)
+        )
+
+    monkeypatch.setattr(chronicler.genai, "Client", _client)
+
+    text = "Speech to test caching."
+    voice = "Sulafat"
+
+    # (c) get_cached_speech_url returns None on a cold key without calling the model
+    assert chronicler.get_cached_speech_url(text, voice) is None
+
+    # (a) synthesize_speech writes a wav via the cache and returns a URL
+    url1 = chronicler.synthesize_speech(text, voice)
+    assert url1 and url1.endswith(".wav")
+    assert calls["n"] == 1
+
+    # (b) a second call with the same text/voice does not call the model again
+    url2 = chronicler.synthesize_speech(text, voice)
+    assert url1 == url2
+    assert calls["n"] == 1
+
+    # verify it is also now found by get_cached_speech_url
+    assert chronicler.get_cached_speech_url(text, voice) == url1
+
+    # (d) synthesize_chronicle_audio's cache key is unchanged (chronicle-tts::{voice}::{text})
+    chron_text = "Chronicle specific text."
+    url_chron = chronicler.synthesize_chronicle_audio(
+        chron_text, {"voice_name": voice}, {"tts": {"enabled": True}}
+    )
+
+    from app.agents.media import get_cached_asset_path
+
+    expected_cache_key = f"chronicle-tts::{voice}::{chron_text}"
+    cached_path = get_cached_asset_path(expected_cache_key, "wav")
+    assert cached_path is not None
+    assert url_chron.endswith(os.path.basename(cached_path))

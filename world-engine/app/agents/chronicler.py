@@ -141,26 +141,21 @@ def _cache_url(path: str) -> str:
     return f"http://localhost:8000/{path}"
 
 
-def synthesize_chronicle_audio(text: str, persona: dict, config: dict) -> str | None:
-    """Generate the chronicle voice-over once and return its cached URL.
-
-    One-time: keyed on (voice, text) so identical prose reuses the same file on
-    disk across restarts. Returns None (and the UI simply omits the play button)
-    if TTS is disabled or unavailable — never breaks the text chronicle.
-    """
-    tts_cfg = config.get("tts", {}) or {}
-    if not text or not tts_cfg.get("enabled", True):
+def synthesize_speech(
+    text: str, voice_name: str, style: str = "", cache_key: str | None = None
+) -> str | None:
+    """Generate voice-over for arbitrary text and return its cached URL."""
+    if not text:
         return None
 
-    voice_name = persona.get("voice_name") or config.get("default_voice_name", "Sulafat")
-    # Style-prompt the delivery so the voice matches the era's teller.
-    style = persona.get("voice", "")
-    spoken = f"Read this aloud in the voice of {style}:\n\n{text}" if style else text
+    if not cache_key:
+        cache_key = f"tts::{voice_name}::{text}"
 
-    cache_prompt = f"chronicle-tts::{voice_name}::{text}"
-    cached = get_cached_asset_path(cache_prompt, "wav")
+    cached = get_cached_asset_path(cache_key, "wav")
     if cached:
         return _cache_url(cached)
+
+    spoken = f"Read this aloud in the voice of {style}:\n\n{text}" if style else text
 
     try:
         client = genai.Client()
@@ -179,11 +174,42 @@ def synthesize_chronicle_audio(text: str, persona: dict, config: dict) -> str | 
             ),
         )
         pcm = response.candidates[0].content.parts[0].inline_data.data
-        path = cache_asset_data(cache_prompt, _pcm_to_wav(pcm), "wav")
+        path = cache_asset_data(cache_key, _pcm_to_wav(pcm), "wav")
         return _cache_url(path)
     except Exception as e:
-        logger.warning("Chronicle TTS unavailable, serving text only: %s", e)
+        logger.warning("Speech synthesis unavailable for text: %s. Error: %s", text, e)
         return None
+
+
+def get_cached_speech_url(text: str, voice_name: str) -> str | None:
+    """Return the cached speech URL for the given text and voice, if it exists."""
+    if not text:
+        return None
+    cache_key = f"tts::{voice_name}::{text}"
+    cached = get_cached_asset_path(cache_key, "wav")
+    if cached:
+        return _cache_url(cached)
+    return None
+
+
+def synthesize_chronicle_audio(text: str, persona: dict, config: dict) -> str | None:
+    """Generate the chronicle voice-over once and return its cached URL.
+
+    One-time: keyed on (voice, text) so identical prose reuses the same file on
+    disk across restarts. Returns None (and the UI simply omits the play button)
+    if TTS is disabled or unavailable — never breaks the text chronicle.
+    """
+    tts_cfg = config.get("tts", {}) or {}
+    if not text or not tts_cfg.get("enabled", True):
+        return None
+
+    voice_name = persona.get("voice_name") or config.get(
+        "default_voice_name", "Sulafat"
+    )
+    style = persona.get("voice", "")
+    cache_key = f"chronicle-tts::{voice_name}::{text}"
+
+    return synthesize_speech(text, voice_name, style=style, cache_key=cache_key)
 
 
 def build_chronicle(world: World, store: CanonStore) -> dict:
@@ -225,14 +251,17 @@ def build_chronicle(world: World, store: CanonStore) -> dict:
 
     stories = _gather_storylines(world.id, store, config.get("max_storylines", 12))
 
-    wrapped = "\n\n".join(
-        spotlight(
-            "canon_entry",
-            f"Thread: {s['title']} ({s['member_count']} linked entr"
-            f"{'y' if s['member_count'] == 1 else 'ies'})\n{s['body']}",
+    wrapped = (
+        "\n\n".join(
+            spotlight(
+                "canon_entry",
+                f"Thread: {s['title']} ({s['member_count']} linked entr"
+                f"{'y' if s['member_count'] == 1 else 'ies'})\n{s['body']}",
+            )
+            for s in stories
         )
-        for s in stories
-    ) or "None"
+        or "None"
+    )
 
     model = get_model_for_role(config.get("model", "narrator"))
     client = genai.Client()
@@ -272,7 +301,9 @@ Storylines so far:
         chronicle_text = data.chronicle_text
         audio_url = synthesize_chronicle_audio(chronicle_text, persona, config)
     except Exception as e:
-        logger.error("Failed to generate chronicle from Gemini API (429/billing): %s", e)
+        logger.error(
+            "Failed to generate chronicle from Gemini API (429/billing): %s", e
+        )
         # 1. Fallback text:
         chronicle_text = (
             "Hark, good folk, and lend your ears to tales of a world where the last true spell, "
@@ -290,6 +321,7 @@ Storylines so far:
         # 2. Try to salvage a cached audio file from disk!
         import glob
         import os
+
         wav_files = glob.glob(os.path.join("cache", "*.wav"))
         audio_url = None
         if wav_files:

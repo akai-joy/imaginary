@@ -48,14 +48,22 @@ except Exception:
     gcp_logger = None
     is_cloud_logging = False
 
-env_origins = os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else []
-allow_origins = list({
-    "http://localhost:5173", "http://127.0.0.1:5173",
-    "http://localhost:5174", "http://127.0.0.1:5174",
-    "http://localhost:5175", "http://127.0.0.1:5175",
-    "http://localhost:5176", "http://127.0.0.1:5176",
-    *env_origins
-})
+env_origins = (
+    os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else []
+)
+allow_origins = list(
+    {
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:5175",
+        "http://localhost:5176",
+        "http://127.0.0.1:5176",
+        *env_origins,
+    }
+)
 
 # Artifact bucket for ADK (created by Terraform, passed via env var)
 logs_bucket_name = os.environ.get("LOGS_BUCKET_NAME")
@@ -99,7 +107,9 @@ def get_user_id_from_token(authorization: str | None, strict: bool = False) -> s
         return "playground_user"
 
     token_str = authorization.replace("Bearer ", "")
-    firebase_app_id = os.environ.get("VITE_FIREBASE_APP_ID") or os.environ.get("FIREBASE_APP_ID")
+    firebase_app_id = os.environ.get("VITE_FIREBASE_APP_ID") or os.environ.get(
+        "FIREBASE_APP_ID"
+    )
     if firebase_app_id:
         try:
             import firebase_admin
@@ -120,18 +130,25 @@ def get_user_id_from_token(authorization: str | None, strict: bool = False) -> s
         except Exception as e:
             logger.warning("Firebase token verification failed, using fallback: %s", e)
             if strict and is_strict_active:
-                raise HTTPException(status_code=401, detail=f"Firebase token verification failed: {e}") from e
+                raise HTTPException(
+                    status_code=401, detail=f"Firebase token verification failed: {e}"
+                ) from e
 
     if strict and is_strict_active:
-        raise HTTPException(status_code=401, detail="Authentication required (Firebase App ID not configured)")
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required (Firebase App ID not configured)",
+        )
     return "playground_user"
 
 
 # --- REST API Endpoints for the Front-End ---
 
+
 def active_world_id() -> str:
     """Resolve which world to serve: advance the lifecycle, else fall back to the newest world (or the default seed)."""
     from app.core.lifecycle import tick
+
     store = get_store()
     w = tick(store)
     if w:
@@ -186,18 +203,20 @@ def get_world_map(authorization: str | None = Header(None)):
         tile_asset = tile_urls.get(loc.id)
         tile_url = tile_asset.gcs_url if tile_asset else None
 
-        locations.append({
-            "id": loc.id,
-            "title": loc.title,
-            "body": loc.body,
-            "region": region,
-            "x": x,
-            "y": y,
-            "near": near,
-            "discovered": discovered,
-            "contributor_id": loc.contributor_id,
-            "tile_url": tile_url,
-        })
+        locations.append(
+            {
+                "id": loc.id,
+                "title": loc.title,
+                "body": loc.body,
+                "region": region,
+                "x": x,
+                "y": y,
+                "near": near,
+                "discovered": discovered,
+                "contributor_id": loc.contributor_id,
+                "tile_url": tile_url,
+            }
+        )
 
     regions = sorted({loc["region"] for loc in locations if loc["region"]})
 
@@ -213,6 +232,7 @@ def get_world(authorization: str | None = Header(None)):
     """GET /world -> the active world summary (theme, opening line, status, and time remaining in the drop)."""
     store = get_store()
     from app.core.lifecycle import is_window_open, seconds_remaining, tick
+
     tick(store)
     active_w_id = active_world_id()
     active_w = store.get_world(active_w_id)
@@ -224,7 +244,9 @@ def get_world(authorization: str | None = Header(None)):
         "theme": active_w.theme,
         "opening_line": active_w.opening_line,
         "art_style": active_w.art_style_directive,
-        "status": active_w.status.value if hasattr(active_w.status, "value") else active_w.status,
+        "status": active_w.status.value
+        if hasattr(active_w.status, "value")
+        else active_w.status,
         "opens_at": active_w.opens_at.isoformat() if active_w.opens_at else None,
         "closes_at": active_w.closes_at.isoformat() if active_w.closes_at else None,
         "time_remaining_seconds": seconds_remaining(active_w),
@@ -243,7 +265,11 @@ def get_world_chronicle(authorization: str | None = Header(None)):
     from app.agents.chronicler import build_chronicle
 
     store = get_store()
-    active_w = store.get_world(active_world_id()) or store.get_world(DEFAULT_WORLD_ID) or SEED_WORLD
+    active_w = (
+        store.get_world(active_world_id())
+        or store.get_world(DEFAULT_WORLD_ID)
+        or SEED_WORLD
+    )
     return build_chronicle(active_w, store)
 
 
@@ -269,13 +295,15 @@ def get_codex(kind: str, authorization: str | None = Header(None)):
     codex_items = []
     for entry in entries:
         discovered = (entry.id in discoveries) or (entry.contributor_id == user_id)
-        codex_items.append({
-            "id": entry.id,
-            "title": entry.title,
-            "body": entry.body,
-            "contributor_id": entry.contributor_id,
-            "discovered": discovered,
-        })
+        codex_items.append(
+            {
+                "id": entry.id,
+                "title": entry.title,
+                "body": entry.body,
+                "contributor_id": entry.contributor_id,
+                "discovered": discovered,
+            }
+        )
 
     return codex_items
 
@@ -291,6 +319,7 @@ def post_discover(payload: DiscoverPayload, authorization: str | None = Header(N
     store = get_store()
     store.save_discovery(user_id, payload.canon_id)
     return {"discovered": True, "canon_id": payload.canon_id}
+
 
 @app.get("/canon/storylines")
 def list_storylines(authorization: str | None = Header(None)):
@@ -336,18 +365,22 @@ def list_storylines(authorization: str | None = Header(None)):
                     derived_from = p_root_id
                     break
 
-        storyline_trees.append({
-            "tree_id": root_id,
-            "title": root_entry.title,
-            "summary": root_entry.body,
-            "type": root_entry.type.value if hasattr(root_entry.type, "value") else root_entry.type,
-            "member_count": len(member_ids),
-            "vote_total": int(vote_total),
-            "composite_score": int(composite_score),
-            "version": version,
-            "voted": voted,
-            "derived_from": derived_from
-        })
+        storyline_trees.append(
+            {
+                "tree_id": root_id,
+                "title": root_entry.title,
+                "summary": root_entry.body,
+                "type": root_entry.type.value
+                if hasattr(root_entry.type, "value")
+                else root_entry.type,
+                "member_count": len(member_ids),
+                "vote_total": int(vote_total),
+                "composite_score": int(composite_score),
+                "version": version,
+                "voted": voted,
+                "derived_from": derived_from,
+            }
+        )
 
     return storyline_trees
 
@@ -384,7 +417,13 @@ def get_storyline(treeId: str, authorization: str | None = Header(None)):
         if entry:
             loaded_entries.append(entry)
 
-    loaded_entries.sort(key=lambda x: x.created_at.replace(tzinfo=None) if x.created_at and hasattr(x.created_at, 'replace') else x.created_at)
+    loaded_entries.sort(
+        key=lambda x: (
+            x.created_at.replace(tzinfo=None)
+            if x.created_at and hasattr(x.created_at, "replace")
+            else x.created_at
+        )
+    )
 
     nodes = []
     scores = []
@@ -396,15 +435,19 @@ def get_storyline(treeId: str, authorization: str | None = Header(None)):
         if score is not None:
             scores.append(score)
 
-        nodes.append({
-            "id": entry.id,
-            "type": entry.type.value if hasattr(entry.type, "value") else entry.type,
-            "title": entry.title,
-            "contributor": entry.contributor_id,
-            "version": entry.version,
-            "derived_from": entry.derived_from,
-            "body": entry.body
-        })
+        nodes.append(
+            {
+                "id": entry.id,
+                "type": entry.type.value
+                if hasattr(entry.type, "value")
+                else entry.type,
+                "title": entry.title,
+                "contributor": entry.contributor_id,
+                "version": entry.version,
+                "derived_from": entry.derived_from,
+                "body": entry.body,
+            }
+        )
 
     composite_score = sum(scores) / len(scores) if scores else 0.0
     version = max(versions) if versions else 1
@@ -421,14 +464,16 @@ def get_storyline(treeId: str, authorization: str | None = Header(None)):
         "tree_id": treeId,
         "title": root_entry.title,
         "summary": root_entry.body,
-        "type": root_entry.type.value if hasattr(root_entry.type, "value") else root_entry.type,
+        "type": root_entry.type.value
+        if hasattr(root_entry.type, "value")
+        else root_entry.type,
         "member_count": len(target_members),
         "vote_total": int(vote_total),
         "composite_score": int(composite_score),
         "version": version,
         "voted": voted,
         "derived_from": derived_from,
-        "nodes": nodes
+        "nodes": nodes,
     }
 
 
@@ -452,7 +497,9 @@ def enqueue_showcase_task(tree_id: str):
 
     service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
     if not service_url:
-        logger.warning("SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost.")
+        logger.warning(
+            "SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost."
+        )
         service_url = "http://localhost:8000"
 
     target_url = f"{service_url.rstrip('/')}/internal/run-showcase"
@@ -492,7 +539,9 @@ def enqueue_atlas_task(location_id: str):
 
     service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
     if not service_url:
-        logger.warning("SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost.")
+        logger.warning(
+            "SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost."
+        )
         service_url = "http://localhost:8000"
 
     target_url = f"{service_url.rstrip('/')}/internal/paint-atlas"
@@ -516,13 +565,16 @@ def enqueue_atlas_task(location_id: str):
             "audience": target_url,
         }
 
-    logger.info("Enqueuing Cloud Tasks target=%s for location_id=%s", target_url, location_id)
+    logger.info(
+        "Enqueuing Cloud Tasks target=%s for location_id=%s", target_url, location_id
+    )
     client.create_task(request={"parent": parent, "task": task})
 
 
 def trigger_atlas_task(location_id: str):
     """Fire the Atlas illustration for a location: inline in local dev, via Cloud Tasks in the cloud."""
     if is_local_dev():
+
         def run_atlas_async():
             try:
                 from app.agents.atlas_illustrator import atlas_node
@@ -531,7 +583,9 @@ def trigger_atlas_task(location_id: str):
                 store = get_store()
                 entry = store.get_canon_entry(location_id)
                 if not entry:
-                    logger.warning("run_atlas_async: location %s not found in store.", location_id)
+                    logger.warning(
+                        "run_atlas_async: location %s not found in store.", location_id
+                    )
                     return
 
                 class SimpleContext:
@@ -541,7 +595,9 @@ def trigger_atlas_task(location_id: str):
                 ctx = SimpleContext()
                 list(atlas_node(ctx, entry))
                 list(cartography_controller_node(ctx, entry))
-                logger.info("Background atlas task completed for location: %s", location_id)
+                logger.info(
+                    "Background atlas task completed for location: %s", location_id
+                )
             except Exception as e:
                 logger.error("Failed to run background atlas task: %s", e)
 
@@ -551,7 +607,6 @@ def trigger_atlas_task(location_id: str):
             enqueue_atlas_task(location_id)
         except Exception as e:
             logger.error("Failed to enqueue atlas task: %s", e)
-
 
 
 # Defined AFTER /canon/storylines and /canon/storylines/{treeId} so the parameterized
@@ -572,22 +627,28 @@ def get_canon_detail(id: str, authorization: str | None = Header(None)):
         for ref_id in entry.references:
             ref_entry = store.get_canon_entry(ref_id)
             if ref_entry:
-                resolved_references.append({
-                    "id": ref_entry.id,
-                    "title": ref_entry.title,
-                    "type": ref_entry.type.value if hasattr(ref_entry.type, "value") else ref_entry.type,
-                })
+                resolved_references.append(
+                    {
+                        "id": ref_entry.id,
+                        "title": ref_entry.title,
+                        "type": ref_entry.type.value
+                        if hasattr(ref_entry.type, "value")
+                        else ref_entry.type,
+                    }
+                )
 
     active_w_id = active_world_id()
     all_entries = store.list_canon_entries(active_w_id)
     referenced_by = []
     for e in all_entries:
         if e.references and id in e.references:
-            referenced_by.append({
-                "id": e.id,
-                "title": e.title,
-                "type": e.type.value if hasattr(e.type, "value") else e.type,
-              })
+            referenced_by.append(
+                {
+                    "id": e.id,
+                    "title": e.title,
+                    "type": e.type.value if hasattr(e.type, "value") else e.type,
+                }
+            )
 
     assembled = assemble_trees(all_entries)
     storylines = []
@@ -629,7 +690,7 @@ def post_vote(payload: VotePayload, authorization: str | None = Header(None)):
             "ok": True,
             "tree_id": tree_id,
             "vote_total": int(vote_total),
-            "voted": True
+            "voted": True,
         }
 
     new_vote = Vote(
@@ -637,7 +698,7 @@ def post_vote(payload: VotePayload, authorization: str | None = Header(None)):
         voter_id=user_id,
         tree_id=tree_id,
         weight=1.0,
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
     store.save_vote(new_vote)
 
@@ -648,6 +709,7 @@ def post_vote(payload: VotePayload, authorization: str | None = Header(None)):
     import yaml
 
     from app.core.config import POLICY_PATH
+
     min_votes = 10
     min_composite_score = 70.0
     if os.path.exists(POLICY_PATH):
@@ -693,17 +755,30 @@ def post_vote(payload: VotePayload, authorization: str | None = Header(None)):
                         from showcase.agent import app as showcase_app
 
                         session_service = InMemorySessionService()
-                        session = session_service.create_session_sync(user_id="system", app_name="showcase")
+                        session = session_service.create_session_sync(
+                            user_id="system", app_name="showcase"
+                        )
                         runner = create_runner(showcase_app, session_service)
 
-                        list(runner.run(
-                            new_message=types.Content(role="user", parts=[types.Part.from_text(text="run")]),
-                            user_id="system",
-                            session_id=session.id
-                        ))
-                        logger.info("Background showcase workflow executed successfully (local fallback).")
+                        list(
+                            runner.run(
+                                new_message=types.Content(
+                                    role="user",
+                                    parts=[types.Part.from_text(text="run")],
+                                ),
+                                user_id="system",
+                                session_id=session.id,
+                            )
+                        )
+                        logger.info(
+                            "Background showcase workflow executed successfully (local fallback)."
+                        )
+                        warm_scene_audio()
                     except Exception as e:
-                        logger.error("Failed to run background showcase workflow (local fallback): %s", e)
+                        logger.error(
+                            "Failed to run background showcase workflow (local fallback): %s",
+                            e,
+                        )
 
                 threading.Thread(target=run_showcase_async, daemon=True).start()
             else:
@@ -716,7 +791,7 @@ def post_vote(payload: VotePayload, authorization: str | None = Header(None)):
         "ok": True,
         "tree_id": tree_id,
         "vote_total": int(vote_total),
-        "voted": True
+        "voted": True,
     }
 
 
@@ -729,11 +804,14 @@ def post_internal_run_showcase(payload: RunShowcasePayload):
     """Internal endpoint called to execute the showcase workflow for a tree."""
     store = get_store()
     from app.core.lifecycle import tick
+
     tick(store)
 
     existing_jobs = store.list_showcase_jobs()
     if any(job.tree_id == payload.tree_id for job in existing_jobs):
-        logger.info("Showcase job already exists for tree %s, skipping.", payload.tree_id)
+        logger.info(
+            "Showcase job already exists for tree %s, skipping.", payload.tree_id
+        )
         return {"ok": True, "message": "Already exists"}
 
     try:
@@ -744,14 +822,20 @@ def post_internal_run_showcase(payload: RunShowcasePayload):
         from showcase.agent import app as showcase_app
 
         session_service = InMemorySessionService()
-        session = session_service.create_session_sync(user_id="system", app_name="showcase")
+        session = session_service.create_session_sync(
+            user_id="system", app_name="showcase"
+        )
         runner = create_runner(showcase_app, session_service)
 
-        list(runner.run(
-            new_message=types.Content(role="user", parts=[types.Part.from_text(text="run")]),
-            user_id="system",
-            session_id=session.id
-        ))
+        list(
+            runner.run(
+                new_message=types.Content(
+                    role="user", parts=[types.Part.from_text(text="run")]
+                ),
+                user_id="system",
+                session_id=session.id,
+            )
+        )
         logger.info("Showcase workflow executed successfully via internal endpoint.")
         return {"ok": True}
     except Exception as e:
@@ -766,7 +850,9 @@ class ScheduleWorldPayload(BaseModel):
 
 
 @app.post("/internal/world/schedule")
-def post_internal_world_schedule(payload: ScheduleWorldPayload, authorization: str | None = Header(None)):
+def post_internal_world_schedule(
+    payload: ScheduleWorldPayload, authorization: str | None = Header(None)
+):
     """POST /internal/world/schedule -> open/schedule a new themed world drop (internal admin hook)."""
     _user_id = get_user_id_from_token(authorization)
     store = get_store()
@@ -784,6 +870,7 @@ def post_internal_world_schedule(payload: ScheduleWorldPayload, authorization: s
         closes_at = closes_at.replace(tzinfo=UTC)
 
     from app.core.lifecycle import schedule_world
+
     w = schedule_world(store, target_id, opens_at=opens_at, closes_at=closes_at)
     if not w:
         raise HTTPException(status_code=404, detail=f"World {target_id} not found")
@@ -802,20 +889,26 @@ def post_internal_tick(authorization: str | None = Header(None)):
     """POST /internal/tick -> advance the world lifecycle (close expired drops); internal cron hook."""
     store = get_store()
     from app.core.lifecycle import tick
+
     w = tick(store)
     return {
         "active_world": {
             "world_id": w.id,
             "status": w.status.value if hasattr(w.status, "value") else w.status,
             "closes_at": w.closes_at.isoformat() if w.closes_at else None,
-        } if w else None
+        }
+        if w
+        else None
     }
 
 
 def get_media_urls_for_scene(scene, media_type: str) -> tuple[str | None, str | None]:
     """Resolve cached comic/reel asset URLs for a storyboard scene by hashing its generation prompt (None until generated)."""
     import hashlib
-    prompt = scene.optimized_prompt if scene.optimized_prompt else scene.visual_description
+
+    prompt = (
+        scene.optimized_prompt if scene.optimized_prompt else scene.visual_description
+    )
     if not prompt:
         prompt = scene.visual_description
 
@@ -830,10 +923,121 @@ def get_media_urls_for_scene(scene, media_type: str) -> tuple[str | None, str | 
     image_path = os.path.join("cache", f"{h}.png")
     video_path = os.path.join("cache", f"{h}.mp4")
 
-    image_url = f"http://localhost:8000/cache/{h}.png" if os.path.exists(image_path) else None
-    video_url = f"http://localhost:8000/cache/{h}.mp4" if os.path.exists(video_path) else None
+    image_url = (
+        f"http://localhost:8000/cache/{h}.png" if os.path.exists(image_path) else None
+    )
+    video_url = (
+        f"http://localhost:8000/cache/{h}.mp4" if os.path.exists(video_path) else None
+    )
 
     return image_url, video_url
+
+
+def attach_panel_audio(panels: list[dict]) -> list[dict]:
+    """Resolves active world's persona voice, then adds cached audio URLs to panels."""
+    if not panels:
+        return panels
+    try:
+        from app.agents.chronicler import (
+            _chronicle_config,
+            get_cached_speech_url,
+            select_persona,
+        )
+
+        store = get_store()
+        active_w = (
+            store.get_world(active_world_id())
+            or store.get_world(DEFAULT_WORLD_ID)
+            or SEED_WORLD
+        )
+        config = _chronicle_config()
+        _, persona = select_persona(active_w.theme, config)
+        voice_name = persona.get("voice_name") or config.get(
+            "default_voice_name", "Sulafat"
+        )
+
+        for panel in panels:
+            caption = panel.get("caption")
+            if caption:
+                panel["audioUrl"] = get_cached_speech_url(caption, voice_name)
+    except Exception as e:
+        logger.error("Failed to attach panel audio: %s", e)
+    return panels
+
+
+def warm_scene_audio():
+    """Pre-generates TTS for all panel captions across all canon scenes."""
+    try:
+        from app.agents.chronicler import (
+            _chronicle_config,
+            get_cached_speech_url,
+            select_persona,
+            synthesize_speech,
+        )
+
+        config = _chronicle_config()
+        tts_cfg = config.get("tts", {}) or {}
+        if not tts_cfg.get("enabled", True):
+            logger.info("Scene audio warming skipped: tts.enabled is False.")
+            return
+
+        logger.info("Starting background scene audio warmer...")
+        store = get_store()
+
+        active_w = (
+            store.get_world(active_world_id())
+            or store.get_world(DEFAULT_WORLD_ID)
+            or SEED_WORLD
+        )
+        _, persona = select_persona(active_w.theme, config)
+        voice_name = persona.get("voice_name") or config.get(
+            "default_voice_name", "Sulafat"
+        )
+        persona_style = persona.get("voice", "")
+
+        entries = store.list_canon_entries()
+
+        warmed_count = 0
+        cached_count = 0
+        failed_count = 0
+
+        for entry in entries:
+            try:
+                # Call get_scene directly
+                scene_data = get_scene(entry.id)
+                panels = scene_data.get("panels", [])
+                for p in panels:
+                    caption = p.get("caption")
+                    if not caption:
+                        continue
+                    # Check if already cached
+                    cached_url = get_cached_speech_url(caption, voice_name)
+                    if cached_url:
+                        cached_count += 1
+                    else:
+                        # Synthesize
+                        res = synthesize_speech(
+                            caption, voice_name, style=persona_style
+                        )
+                        if res:
+                            warmed_count += 1
+                        else:
+                            failed_count += 1
+            except Exception as ex:
+                logger.error("Warmer failed to process scene %s: %s", entry.id, ex)
+
+        logger.info(
+            "Scene audio warming complete: %d warmed, %d already cached, %d failed",
+            warmed_count,
+            cached_count,
+            failed_count,
+        )
+    except Exception as e:
+        logger.error("Scene audio warmer failed completely: %s", e)
+
+
+# Start the warmer on startup in a daemon background thread
+threading.Thread(target=warm_scene_audio, daemon=True).start()
 
 
 @app.get("/scenes/{scene_id}")
@@ -844,16 +1048,22 @@ def get_scene(scene_id: str):
     if not entry:
         raise HTTPException(status_code=404, detail="Scene/Canon entry not found")
 
-    if scene_id in ("canon_alistair", "canon_10254e4f-2552-4528-aa24-5fb891f200a8", "canon_10072aa0-ccd9-4bca-875b-9399a501efc2", "canon_86cfa3fe-c56d-4fda-a066-469d40eb7cf0", "canon_eldoria", "eldoria", "canon_drk", "canon_pia"):
+    if scene_id in (
+        "canon_alistair",
+        "canon_10254e4f-2552-4528-aa24-5fb891f200a8",
+        "canon_10072aa0-ccd9-4bca-875b-9399a501efc2",
+        "canon_86cfa3fe-c56d-4fda-a066-469d40eb7cf0",
+        "canon_eldoria",
+        "eldoria",
+        "canon_drk",
+        "canon_pia",
+    ):
         # Custom override for the Alistair / Elynar storyline matching the custom video assets
         choices = []
         canon_entries = store.list_canon_entries()
         children = [e for e in canon_entries if scene_id in e.derived_from]
         for child in children:
-            choices.append({
-                "label": child.title,
-                "to": child.id
-            })
+            choices.append({"label": child.title, "to": child.id})
 
         if scene_id == "canon_alistair":
             panels = [
@@ -864,7 +1074,7 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/silence_falls_over_the_scorche.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "alistair_p2",
@@ -873,7 +1083,7 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/she_is_in_a_magic_school_how.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "alistair_p3",
@@ -882,7 +1092,7 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/regenerate_this_one_the_wizar.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "alistair_p4",
@@ -891,7 +1101,7 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "alistair_p5",
@@ -900,10 +1110,10 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/the_crows_deliver_the_message.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
-                }
+                    "durationMs": 5200,
+                },
             ]
-        elif scene_id == "canon_10254e4f-2552-4528-aa24-5fb891f200a8": # The Ash Oak
+        elif scene_id == "canon_10254e4f-2552-4528-aa24-5fb891f200a8":  # The Ash Oak
             panels = [
                 {
                     "id": "ash_oak_p1",
@@ -912,7 +1122,7 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/silence_falls_over_the_scorche.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "ash_oak_p2",
@@ -921,7 +1131,7 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/she_is_in_a_magic_school_how.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "ash_oak_p3",
@@ -930,10 +1140,13 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/regenerate_this_one_the_wizar.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
-                }
+                    "durationMs": 5200,
+                },
             ]
-        elif scene_id in ("canon_eldoria", "eldoria"): # Sliced 6-panel Eldoria Storyline
+        elif scene_id in (
+            "canon_eldoria",
+            "eldoria",
+        ):  # Sliced 6-panel Eldoria Storyline
             panels = [
                 {
                     "id": "p1",
@@ -942,7 +1155,7 @@ def get_scene(scene_id: str):
                     "audioUrl": None,
                     "caption": "At the edge of the white pass, the traveler saw it at last — Eldoria, glowing gold against the dark.",
                     "prompt": "Wide shot. A weary traveler on a snow-covered mountain path; the golden lights of Eldoria nestle among snowy peaks. Dusk, deep blues and purples.",
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "p2",
@@ -951,7 +1164,7 @@ def get_scene(scene_id: str):
                     "audioUrl": None,
                     "caption": "The village lay cupped in the valley, steam rising from the springs like breath on the cold air.",
                     "prompt": "High-angle establishing shot. Eldoria in a snowy valley, rustic cabins, warm windows, thick steam from mineral hot springs. Starry sky.",
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "p3",
@@ -960,7 +1173,7 @@ def get_scene(scene_id: str):
                     "audioUrl": None,
                     "caption": "She sank into the hot spring, and the journey's ache lifted into the steam and the stars.",
                     "prompt": "Medium shot. The traveler soaks in a stone hot spring, eyes closed; ethereal steam drifts upward, catching soft light. Brilliant starry sky.",
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "p4",
@@ -969,7 +1182,7 @@ def get_scene(scene_id: str):
                     "audioUrl": None,
                     "caption": "The tavern door gave way to warmth — light, voices, the smell of something good.",
                     "prompt": "Low-angle dynamic shot. The traveler pushes open a heavy wooden door into a bustling warm tavern; golden light pours out.",
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "p5",
@@ -978,7 +1191,7 @@ def get_scene(scene_id: str):
                     "audioUrl": None,
                     "caption": "By the hearth she cradled the mug, and for the first time in weeks, she smiled.",
                     "prompt": "Medium close-up. The traveler in a plush armchair by a roaring stone hearth, holding a steaming mug, gentle smile, warm firelight.",
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "p6",
@@ -987,10 +1200,12 @@ def get_scene(scene_id: str):
                     "audioUrl": None,
                     "caption": "Snow fell soft over the sleeping village, and Eldoria kept its quiet, glowing watch.",
                     "prompt": "POV from inside a cabin looking out a wooden window; soft snow over the sleeping village at night, glowing windows, cool blue tones.",
-                    "durationMs": 5200
-                }
+                    "durationMs": 5200,
+                },
             ]
-        elif scene_id == "canon_86cfa3fe-c56d-4fda-a066-469d40eb7cf0": # The School of Magic
+        elif (
+            scene_id == "canon_86cfa3fe-c56d-4fda-a066-469d40eb7cf0"
+        ):  # The School of Magic
             panels = [
                 {
                     "id": "magic_school_p1",
@@ -999,10 +1214,10 @@ def get_scene(scene_id: str):
                     "imageUrl": "http://localhost:8000/cache/schoolofmagic.jpg",
                     "videoUrl": None,
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 }
             ]
-        elif scene_id == "canon_drk": # The Slagmaw Drake
+        elif scene_id == "canon_drk":  # The Slagmaw Drake
             panels = [
                 {
                     "id": "drk_p1",
@@ -1011,10 +1226,10 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/gcs_mock/world-engine-showcase/the_slagmaw_drake.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 }
             ]
-        elif scene_id == "canon_pia": # Pia, the Chronicler of Lantern Row
+        elif scene_id == "canon_pia":  # Pia, the Chronicler of Lantern Row
             panels = [
                 {
                     "id": "pia_p1",
@@ -1023,10 +1238,10 @@ def get_scene(scene_id: str):
                     "imageUrl": "http://localhost:8000/cache/pia_the_chronicler.jpg",
                     "videoUrl": None,
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 }
             ]
-        else: # Alistair's Protege, Elynar
+        else:  # Alistair's Protege, Elynar
             panels = [
                 {
                     "id": "protege_p1",
@@ -1035,7 +1250,7 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/two_changes_Elynar_is_a_girl.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
+                    "durationMs": 5200,
                 },
                 {
                     "id": "protege_p2",
@@ -1044,16 +1259,18 @@ def get_scene(scene_id: str):
                     "imageUrl": None,
                     "videoUrl": "http://localhost:8000/cache/the_crows_deliver_the_message.mp4",
                     "audioUrl": None,
-                    "durationMs": 5200
-                }
+                    "durationMs": 5200,
+                },
             ]
 
         return {
             "id": entry.id,
             "title": entry.title,
-            "logline": entry.body[:150] + "..." if len(entry.body) > 150 else entry.body,
-            "panels": panels,
-            "choices": choices
+            "logline": entry.body[:150] + "..."
+            if len(entry.body) > 150
+            else entry.body,
+            "panels": attach_panel_audio(panels),
+            "choices": choices,
         }
 
     from app.core.types import Storyboard
@@ -1087,10 +1304,7 @@ def get_scene(scene_id: str):
     choices = []
     children = [e for e in canon_entries if scene_id in e.derived_from]
     for child in children:
-        choices.append({
-            "label": child.title,
-            "to": child.id
-        })
+        choices.append({"label": child.title, "to": child.id})
 
     # Map storyboard scenes to panels using the text overlap heuristic
     panels = []
@@ -1138,42 +1352,48 @@ def get_scene(scene_id: str):
                 video_url = None
             else:
                 image_url, video_url = get_media_urls_for_scene(s, job.media_type)
-            panels.append({
-                "id": f"{scene_id}_p_{idx}",
-                "prompt": s.visual_description,
-                "caption": s.caption,
-                "imageUrl": image_url,
-                "videoUrl": video_url,
-                "audioUrl": None,
-                "durationMs": 5200
-            })
+            panels.append(
+                {
+                    "id": f"{scene_id}_p_{idx}",
+                    "prompt": s.visual_description,
+                    "caption": s.caption,
+                    "imageUrl": image_url,
+                    "videoUrl": video_url,
+                    "audioUrl": None,
+                    "durationMs": 5200,
+                }
+            )
     else:
         # Fallback panel from the entry itself if no storyboard match or job is not yet run
         image_url = None
         entry_type = entry.type.value if hasattr(entry.type, "value") else entry.type
         if entry_type == "location":
             assets = store.list_media_assets()
-            tile_assets = [a for a in assets if a.kind == "map_tile" and a.node_id == entry.id]
+            tile_assets = [
+                a for a in assets if a.kind == "map_tile" and a.node_id == entry.id
+            ]
             if tile_assets:
                 latest_tile = max(tile_assets, key=lambda a: a.created_at)
                 image_url = latest_tile.gcs_url
 
-        panels.append({
-            "id": f"{scene_id}_fallback",
-            "prompt": f"Illustration of {entry.title}: {entry.body}",
-            "caption": entry.body,
-            "imageUrl": image_url,
-            "videoUrl": None,
-            "audioUrl": None,
-            "durationMs": 5200
-        })
+        panels.append(
+            {
+                "id": f"{scene_id}_fallback",
+                "prompt": f"Illustration of {entry.title}: {entry.body}",
+                "caption": entry.body,
+                "imageUrl": image_url,
+                "videoUrl": None,
+                "audioUrl": None,
+                "durationMs": 5200,
+            }
+        )
 
     return {
         "id": entry.id,
         "title": entry.title,
         "logline": entry.body[:150] + "..." if len(entry.body) > 150 else entry.body,
-        "panels": panels,
-        "choices": choices
+        "panels": attach_panel_audio(panels),
+        "choices": choices,
     }
 
 
@@ -1234,20 +1454,24 @@ def get_showcase():
                 path_part = gcs_url.replace("https://storage.googleapis.com/", "")
                 gcs_url = f"http://localhost:8000/gcs_mock/{path_part}"
 
-        showcase_items.append({
-            "id": asset.id,
-            "tree_id": asset.tree_id,
-            "kind": asset.kind,
-            "title": title,
-            "caption": asset.caption,
-            "hashtags": asset.hashtags,
-            "contributor_ids": asset.contributor_ids,
-            "gcs_url": gcs_url,
-            "panels": panels if asset.kind == "comic" else None,
-            "scenes": scenes if asset.kind == "reel" else None,
-            "optimized_prompts": optimized_prompts,
-            "prompt_sheet_url": f"http://localhost:8000/gcs_mock/world-engine-showcase/{job.id}_prompt_sheet.txt" if job else None
-        })
+        showcase_items.append(
+            {
+                "id": asset.id,
+                "tree_id": asset.tree_id,
+                "kind": asset.kind,
+                "title": title,
+                "caption": asset.caption,
+                "hashtags": asset.hashtags,
+                "contributor_ids": asset.contributor_ids,
+                "gcs_url": gcs_url,
+                "panels": panels if asset.kind == "comic" else None,
+                "scenes": scenes if asset.kind == "reel" else None,
+                "optimized_prompts": optimized_prompts,
+                "prompt_sheet_url": f"http://localhost:8000/gcs_mock/world-engine-showcase/{job.id}_prompt_sheet.txt"
+                if job
+                else None,
+            }
+        )
 
     return showcase_items
 
@@ -1262,19 +1486,22 @@ class ContributePayload(BaseModel):
 
 
 @app.post("/contribute")
-def post_contribute(payload: ContributePayload, authorization: str | None = Header(None)):
+def post_contribute(
+    payload: ContributePayload, authorization: str | None = Header(None)
+):
     """POST /contribute -> Execute world_engine_workflow ingest synchronously"""
     user_id = get_user_id_from_token(authorization, strict=True)
 
     store = get_store()
     from app.core.lifecycle import is_window_open, tick
+
     active_w = tick(store)
     if not active_w or not is_window_open(active_w):
         return {
             "status": "rejected",
             "verdict": "CLOSED",
             "score": 0,
-            "message": "This world has closed — it's now an archived collectible."
+            "message": "This world has closed — it's now an archived collectible.",
         }
 
     world_id_to_use = payload.world_id
@@ -1298,23 +1525,22 @@ def post_contribute(payload: ContributePayload, authorization: str | None = Head
         "id_token": authorization.replace("Bearer ", "") if authorization else None,
         "world_id": world_id_to_use,
         "derived_from": payload.derived_from,
-        "references": payload.references
+        "references": payload.references,
     }
 
     message = types.Content(
-        role="user",
-        parts=[types.Part.from_text(text=json.dumps(input_data))]
+        role="user", parts=[types.Part.from_text(text=json.dumps(input_data))]
     )
 
     try:
-        events = list(runner.run(
-            new_message=message,
-            user_id=user_id,
-            session_id=session.id
-        ))
+        events = list(
+            runner.run(new_message=message, user_id=user_id, session_id=session.id)
+        )
 
         # Retrieve the final outcome from session state
-        session_obj = session_service.get_session_sync(user_id=user_id, session_id=session.id, app_name="app")
+        session_obj = session_service.get_session_sync(
+            user_id=user_id, session_id=session.id, app_name="app"
+        )
         state = session_obj.state if session_obj else {}
 
         # Moderation halts the graph via the BLOCK route (no error_message), so detect
@@ -1337,7 +1563,9 @@ def post_contribute(payload: ContributePayload, authorization: str | None = Head
 
         # Check for direct execution errors
         for event in events:
-            event_err = getattr(event, "error_message", None) or getattr(event, "error_code", None)
+            event_err = getattr(event, "error_message", None) or getattr(
+                event, "error_code", None
+            )
             if event_err:
                 reason = str(event_err)
                 if "Security Block" in reason:
@@ -1360,18 +1588,17 @@ def post_contribute(payload: ContributePayload, authorization: str | None = Head
             if narrator_proposal:
                 status = narrator_proposal.get("contrib_status", "accepted")
                 new_entry = narrator_proposal.get("new_entry")
-                if status == "accepted" and new_entry and new_entry.get("type") == "location":
+                if (
+                    status == "accepted"
+                    and new_entry
+                    and new_entry.get("type") == "location"
+                ):
                     try:
                         trigger_atlas_task(new_entry["id"])
                     except Exception as e:
                         logger.error("Failed to trigger atlas task: %s", e)
 
-        return {
-            "status": status,
-            "verdict": verdict,
-            "score": score,
-            "message": reason
-        }
+        return {"status": status, "verdict": verdict, "score": score, "message": reason}
 
     except Exception as e:
         logger.error("Workflow execution failed: %s", e)
@@ -1381,23 +1608,22 @@ def post_contribute(payload: ContributePayload, authorization: str | None = Head
                 "status": "blocked",
                 "verdict": "BLOCK",
                 "score": 0,
-                "message": err_msg
+                "message": err_msg,
             }
         elif "contradiction" in err_msg.lower():
             return {
                 "status": "rejected",
                 "verdict": "ALLOW",
                 "score": 0,
-                "message": err_msg
+                "message": err_msg,
             }
         else:
             return {
                 "status": "rejected",
                 "verdict": "ALLOW",
                 "score": 0,
-                "message": f"Execution failed: {err_msg}"
+                "message": f"Execution failed: {err_msg}",
             }
-
 
 
 class PaintAtlasPayload(BaseModel):
@@ -1442,4 +1668,5 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
 # Main execution
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

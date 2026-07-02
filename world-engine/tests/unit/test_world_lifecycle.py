@@ -94,7 +94,7 @@ def test_save_get_list_worlds_round_trip(store):
         opening_line="The tide turned, and so did the crew.",
         art_style_directive="weathered nautical ink",
         moderation_profile="strict",
-        opens_at=datetime(2026, 7, 1, tzinfo=UTC),
+        opens_at=datetime(2036, 7, 1, tzinfo=UTC),
     )
     store.save_world(w)
 
@@ -109,7 +109,7 @@ def test_save_get_list_worlds_round_trip(store):
 def test_get_active_world_picks_most_recent_active(store):
     store.save_world(World(
         id="world_pirates", theme="Pirates", opening_line="x",
-        opens_at=datetime(2026, 7, 1, tzinfo=UTC),
+        opens_at=datetime(2036, 7, 1, tzinfo=UTC),
     ))
     # Two active worlds: the most recently opened one wins.
     assert store.get_active_world().id == "world_pirates"
@@ -216,7 +216,7 @@ def test_rollover_world_closes_current_and_opens_next(store):
         id="world_pirates",
         theme="Pirates",
         opening_line="The tide turned, and so did the crew.",
-        opens_at=datetime(2026, 7, 1, tzinfo=UTC),
+        opens_at=datetime(2036, 7, 1, tzinfo=UTC),
     )
     archived, opened = lifecycle.rollover_world(store, next_world)
 
