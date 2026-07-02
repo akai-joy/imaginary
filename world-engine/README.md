@@ -53,9 +53,9 @@ controller to validate and apply it. **Do not write to the store from an LLM nod
 `app/core/security.py` `SecurityPlugin` (a `BasePlugin`) is the reusable guardrail layer, attached
 via `App(plugins=[SecurityPlugin()])`:
 
-- **`before_model`** — unicode-normalize, strip zero-width chars, redact PII, run a deterministic +
-  Flash-Lite prompt-injection screen, and spotlight-wrap untrusted text in `<user_contribution>` /
-  `<canon_entry>` tags.
+- **`before_model`** — unicode-normalize, strip zero-width chars, redact PII (regex-based: emails,
+  phones, SSNs), run a deterministic + Flash-Lite prompt-injection screen, and spotlight-wrap
+  untrusted text in `<user_contribution>` / `<canon_entry>` tags.
 - **`after_model`** — enforce the output schema; block HTML/JS, `<img>`, and non-allowlisted URLs.
 - **`before_tool`** — enforce the per-agent `AGENT_TOOL_ALLOWLIST`, strip dangerous tools from
   content-reading agents, confine GCS access to the job prefix, and require confirmation for

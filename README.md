@@ -120,7 +120,7 @@ attached to every `App`:
 
 | Hook | What it does |
 | --- | --- |
-| `before_model` | Unicode-normalize, strip zero-width chars, redact PII, run a deterministic + Flash-Lite prompt-injection screen, and **spotlight-wrap** untrusted text in `<user_contribution>` / `<canon_entry>` tags. |
+| `before_model` | Unicode-normalize, strip zero-width chars, redact PII (regex-based: emails, phones, SSNs), run a deterministic + Flash-Lite prompt-injection screen, and **spotlight-wrap** untrusted text in `<user_contribution>` / `<canon_entry>` tags. |
 | `after_model` | Enforce the output schema; block HTML/JS, `<img>`, and non-allowlisted URLs. |
 | `before_tool` | Enforce a per-agent **tool allowlist** (`AGENT_TOOL_ALLOWLIST`), strip dangerous tools from content-reading agents, confine GCS access to the job prefix, and require confirmation for irreversible actions. |
 | `after_tool` | Re-screen tool results as untrusted input. |
@@ -215,7 +215,7 @@ Narrator does internally — now offered to the reader (or an external agent) as
 | --- | --- |
 | **Agent / multi-agent system (ADK)** | Two ADK 2.0 graph workflows, 15 specialized agents, routed edges, the Proposal→Controller pattern (`world-engine/app/`). |
 | **MCP Server** | `world-engine/app/mcp_server.py` — a read-only Canon MCP server (`get_world_state`, `get_codex`, `get_story`, `get_lore_context`, `check_continuity`) that exposes the living world to any MCP client, with no write path. |
-| **Security features** | `SecurityPlugin` (injection screening, PII redaction, spotlighting, tool allowlists, second-order injection defense) + red-team tests. |
+| **Security features** | `SecurityPlugin` (injection screening, regex-based PII redaction, spotlighting, tool allowlists, second-order injection defense) + red-team tests. |
 | **Agent skills (Agents CLI)** | `agents-cli` drives scaffold, playground, eval, and deploy — see commands below. |
 | **Deployability** | `world-engine/Dockerfile` + Terraform under `world-engine/deployment/` for Cloud Run / Agent Runtime; SQLite locally, Firestore in the cloud. |
 | **Antigravity** | The system was built with Antigravity (Gemini) as the coding agent. |

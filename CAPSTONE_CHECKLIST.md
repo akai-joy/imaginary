@@ -13,12 +13,12 @@ Consider deleting this file before the repo goes public for judging.
 
 ## Strongly recommended before judging
 
-- [ ] Trim the "Value, economy & rewards" section of WRITEUP.md to ~a third of its length — future-monetization vision dilutes the security story that wins points
+- [x] Trim the "Value, economy & rewards" section of WRITEUP.md to ~a third of its length — future-monetization vision dilutes the security story that wins points
 - [x] Back up `world.db` before any demo rehearsal — `pytest` mutates the real demo canon
-- [ ] Fix the `datetime.utcnow()` deprecation warning at `world-engine/app/mcp_server.py:149` (use `datetime.now(UTC)`)
+- [x] Fix the `datetime.utcnow()` deprecation warning at `world-engine/app/mcp_server.py:149` (use `datetime.now(UTC)`)
 
 ## Optional polish (only if time allows)
 
-- [ ] Soften enterprise-scale wording where the implementation is lightweight (e.g. note "PII redaction" is regex-based for email/phone/SSN) — same candor as the keyword-continuity limitation
+- [x] Soften enterprise-scale wording where the implementation is lightweight (e.g. note "PII redaction" is regex-based for email/phone/SSN) — same candor as the keyword-continuity limitation
 - [ ] Reduce the 83 pytest warnings (mostly deprecations)
 - [ ] Post-submission: split up the 1,672-line `fast_api_app.py` monolith (inline imports, per-request `InMemorySessionService`)

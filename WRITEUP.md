@@ -107,8 +107,9 @@ project's primary risk surface (OWASP **LLM01**).
 - **An injection defense built on the principle that you cannot prompt your way out of
   injection.** Detection is one layer; the real protection is deterministic. It's a
   single reusable ADK **Plugin** registered once on the Runner, so guardrails apply
-  globally: input screening, PII redaction, output filtering (no HTML/JS/non-allowlisted
-  URLs), per-agent tool allowlists, and untrusted-result re-screening.
+  globally: input screening, regex-based PII redaction (emails, phone numbers, SSNs),
+  output filtering (no HTML/JS/non-allowlisted URLs), per-agent tool allowlists, and
+  untrusted-result re-screening.
 - **Least privilege — the Proposal→Controller invariant.** LLM nodes only *propose*
   schema-validated output; a deterministic, non-LLM controller is the only code that
   commits any side effect, clamping every value (scores to 0–100, coordinates to bounds)
@@ -210,39 +211,25 @@ against.
 
 ## Value, economy & rewards (the vision this is built for)
 
-World Engine is the first floor of a creator-economy platform for collaborative IP, and
-the architecture was chosen with that in mind. The same agent routines that keep the
-world safe and coherent are also what make a *fair* reward system possible — the agents
-are the referee for **value and attribution**, not just safety.
+World Engine is the first floor of a creator-economy platform for collaborative IP: the
+same agents that keep the world safe and coherent are also the referee for **value and
+attribution**. Because every contribution is **scored and provenance-traced**, a
+finished world's value can be split *fairly and deterministically* among its authors — a
+"proof-of-creativity" payout over the existing ledger + provenance graph — with badges,
+collectible renders of canon, and merch revenue-sharing as natural extensions.
 
-- **Collection & status.** Contributors earn worldbuilding **badges** (first lore in a
-  drop, lore others built on, a storyline that reached the showcase, a season survived).
-  Status is derived entirely from data the system already records — accepted
-  contributions, votes received, and provenance reach.
-- **Outputs worth keeping.** Because the showcase pipeline already turns the best
-  storylines into media, the natural next step is more **render targets** of the same
-  canon: a printable **book / e-book** for a season that scores well, **D&D-style
-  adventure modules**, and **digital backgrounds / art**. The season-finale **book
-  compiler** is the seed of this and already has its read layer (the Canon MCP server's
-  `get_story` / `get_codex`). Digital outputs are **free for contributors to collect**.
-- **Aligned incentives via provenance.** This is the part the agents uniquely enable.
-  Every contribution is **scored and provenance-traced**, so the value of a finished
-  world can be split *fairly and deterministically* among the people who authored it and
-  the people whose ideas others built on — a "proof-of-creativity" payout computed over
-  the existing ledger + provenance graph. Selling physical merch from a great world could
-  then route a share of profit back to contributors, turning "only valuable
-  contributions become canon" into "valuable contributions earn."
-
-**Scope discipline for this capstone:** the economy here is deliberately **points-only
-and simulated** — no cryptocurrency, tokens, wallets, or real payments (see the
-Responsible-AI notes). The reward split is modelled and *shown* (an attribution split
-over the provenance graph), never settled with real money. Real fulfilment, payouts, and
-the KYC/tax/marketplace machinery they require are explicitly future work.
+**Scope discipline for this capstone:** the economy is deliberately **points-only and
+simulated** — no cryptocurrency, tokens, wallets, or real payments (see the
+Responsible-AI notes). The reward split is modelled and *shown*, never settled.
 
 ## Limitations and future work
 
 Scoring quality is bounded by the judging model; continuity search is keyword-based and
-would benefit from vector retrieval at scale. Future work, roughly in order:
+would benefit from vector retrieval at scale. The plugin's input hygiene is likewise
+deliberately lightweight for this scope: PII redaction is three regex patterns (email,
+phone, SSN) — a stand-in for a real DLP service — and the deterministic injection screen
+is a pattern list backed by a Flash-Lite classifier, not a trained detector. Future
+work, roughly in order:
 
 1. **Vector-RAG continuity** to scale canon-consistency beyond keyword matching.
 2. **Season-finale book compiler** — render an archived drop into a full anthology
