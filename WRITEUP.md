@@ -239,3 +239,8 @@ work, roughly in order:
 5. **A provenance-weighted reward split** — first simulated (as above), and only later, if
    ever, a regulated/opt-in real payout path with the necessary compliance layer.
 6. **A reviewed live-publishing path** (today the showcase stops at a mock review gate).
+7. **Refactor the REST layer** (known issue) — extract `fast_api_app.py`'s routes and
+   background workers into modules with bounded task executors. The plan and its
+   guardrails — including a pinned test that runners are only ever built via
+   `runner_factory`, so `SecurityPlugin` coverage survives the split — are in
+   [`world-engine/REFACTORING_PROPOSAL.md`](world-engine/REFACTORING_PROPOSAL.md).

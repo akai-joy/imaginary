@@ -1,10 +1,10 @@
-# Refactoring Proposal: Splitting the `fast_api_app.py` Monolith
+# Refactoring Proposal: Restructuring the REST Layer (`fast_api_app.py`)
 
-This report evaluates the proposal to split up the 1,672-line `fast_api_app.py` monolith, eliminate performance/readability bottlenecks like inline imports, and refactor the per-request `InMemorySessionService` lifecycle.
+This report evaluates the proposal to split up the 1,672-line `fast_api_app.py`, eliminate performance/readability bottlenecks like inline imports, and refactor the per-request `InMemorySessionService` lifecycle.
 
 ---
 
-## 1. Architectural Problems in the Current Monolith
+## 1. Known Issues in the Current REST Layer
 
 ### A. Size & Cognitive Load
 With over 1,600 lines, `fast_api_app.py` mixes multiple distinct responsibilities:

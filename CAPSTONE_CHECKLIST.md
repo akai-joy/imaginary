@@ -21,4 +21,4 @@ Consider deleting this file before the repo goes public for judging.
 
 - [x] Soften enterprise-scale wording where the implementation is lightweight (e.g. note "PII redaction" is regex-based for email/phone/SSN) — same candor as the keyword-continuity limitation
 - [ ] Reduce the 83 pytest warnings (mostly deprecations)
-- [ ] Post-submission: split up the 1,672-line `fast_api_app.py` monolith (inline imports, per-request `InMemorySessionService`)
+- [ ] Post-submission: refactor the REST layer — split up the 1,672-line `fast_api_app.py` (inline imports, per-request `InMemorySessionService`); plan in `world-engine/REFACTORING_PROPOSAL.md`
