@@ -60,3 +60,7 @@ Thumbs.db
 
 # Build-prompt / Antigravity scaffolding docs (kept locally, out of the repo)
 prompts/
+
+# Backups
+world-engine/backup/
+backup/
