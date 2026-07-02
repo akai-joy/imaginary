@@ -157,9 +157,7 @@ def showcase_tally_node(ctx: Context, node_input: Any):
             tree.composite_score,
         )
 
-    ctx.state["tally_proposal"] = {
-        "new_jobs": [job.model_dump() for job in new_jobs]
-    }
+    ctx.state["tally_proposal"] = {"new_jobs": [job.model_dump() for job in new_jobs]}
 
     # Yield info summary as markdown text
     summary_parts = [

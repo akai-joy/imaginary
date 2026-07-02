@@ -86,7 +86,9 @@ def atlas_node(ctx: Context, node_input: CanonEntry):
         try:
             client = genai.Client()
         except Exception as e:
-            logger.warning("Atlas Node: genai client unavailable (%s); using mock image.", e)
+            logger.warning(
+                "Atlas Node: genai client unavailable (%s); using mock image.", e
+            )
         tile_bytes = generate_imagen_panel(client, tile_prompt, 1)
         os.makedirs(CACHE_DIR, exist_ok=True)
         with open(tile_cache_path, "wb") as f:
@@ -135,7 +137,10 @@ def atlas_node(ctx: Context, node_input: CanonEntry):
             try:
                 client = genai.Client()
             except Exception as e:
-                logger.warning("Atlas Node: genai client unavailable for base map (%s); using mock base map.", e)
+                logger.warning(
+                    "Atlas Node: genai client unavailable for base map (%s); using mock base map.",
+                    e,
+                )
 
             base_map_bytes = generate_imagen_panel(client, base_map_prompt, 1)
             os.makedirs(CACHE_DIR, exist_ok=True)
@@ -145,10 +150,15 @@ def atlas_node(ctx: Context, node_input: CanonEntry):
             try:
                 canvas_image = Image.open(io.BytesIO(base_map_bytes))
             except Exception as e:
-                logger.error("Atlas Node: failed to parse generated base map, creating solid canvas: %s", e)
+                logger.error(
+                    "Atlas Node: failed to parse generated base map, creating solid canvas: %s",
+                    e,
+                )
                 canvas_image = Image.new("RGB", (1024, 1024), (230, 215, 184))
                 draw = ImageDraw.Draw(canvas_image)
-                draw.rectangle([(20, 20), (1004, 1004)], outline=(180, 160, 130), width=3)
+                draw.rectangle(
+                    [(20, 20), (1004, 1004)], outline=(180, 160, 130), width=3
+                )
 
         # Ensure canvas image is exactly 1024x1024
         if canvas_image.size != (1024, 1024):

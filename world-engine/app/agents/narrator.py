@@ -266,13 +266,17 @@ Content to evaluate:
             )
         else:
             contrib.status = ContributionStatus.ACCEPTED
-            logger.info("Contribution is ALLOWED and ACCEPTED, proposing ACCEPTED status + CanonEntry.")
+            logger.info(
+                "Contribution is ALLOWED and ACCEPTED, proposing ACCEPTED status + CanonEntry."
+            )
 
         # Save narrator proposal to state
         ctx.state["narrator_proposal"] = {
             "new_entry": {
                 "id": new_entry.id,
-                "type": new_entry.type.value if hasattr(new_entry.type, "value") else new_entry.type,
+                "type": new_entry.type.value
+                if hasattr(new_entry.type, "value")
+                else new_entry.type,
                 "title": new_entry.title,
                 "body": new_entry.body,
                 "contributor_id": new_entry.contributor_id,
@@ -280,7 +284,9 @@ Content to evaluate:
                 "version": new_entry.version,
                 "created_at": new_entry.created_at.isoformat(),
             },
-            "contrib_status": contrib.status.value if hasattr(contrib.status, "value") else contrib.status,
+            "contrib_status": contrib.status.value
+            if hasattr(contrib.status, "value")
+            else contrib.status,
             "world_summary": world_summary,
         }
 

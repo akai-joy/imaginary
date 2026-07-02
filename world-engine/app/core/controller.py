@@ -195,9 +195,12 @@ def showcase_controller_node(ctx: Context, node_input: list[ShowcaseJob]):
                     dest_path = os.path.join(dest_dir, prompt_sheet_filename)
                     try:
                         import shutil
+
                         if os.path.exists(prompt_sheet_path):
                             shutil.copy2(prompt_sheet_path, dest_path)
-                            logger.info("Controller wrote prompt sheet to GCS: %s", dest_path)
+                            logger.info(
+                                "Controller wrote prompt sheet to GCS: %s", dest_path
+                            )
                     except Exception as e:
                         logger.error("Controller failed to copy prompt sheet: %s", e)
 
@@ -300,9 +303,13 @@ def cartography_controller_node(ctx: Context, node_input: CanonEntry):
         if tile_dest:
             basename = os.path.basename(tile_dest)
             if not tile_dest.startswith("gcs_mock/world-engine-atlas/"):
-                raise ValueError(f"Security Block: Out-of-prefix GCS write attempt for '{tile_dest}'.")
+                raise ValueError(
+                    f"Security Block: Out-of-prefix GCS write attempt for '{tile_dest}'."
+                )
             if not basename.startswith(f"maptile_{location_id}_"):
-                raise ValueError(f"Security Block: filename '{basename}' does not match location '{location_id}'.")
+                raise ValueError(
+                    f"Security Block: filename '{basename}' does not match location '{location_id}'."
+                )
 
             os.makedirs(os.path.dirname(tile_dest), exist_ok=True)
             if os.path.exists(tile_src):
@@ -318,14 +325,20 @@ def cartography_controller_node(ctx: Context, node_input: CanonEntry):
         if canvas_dest:
             basename = os.path.basename(canvas_dest)
             if not canvas_dest.startswith("gcs_mock/world-engine-atlas/"):
-                raise ValueError(f"Security Block: Out-of-prefix GCS write attempt for '{canvas_dest}'.")
+                raise ValueError(
+                    f"Security Block: Out-of-prefix GCS write attempt for '{canvas_dest}'."
+                )
             if not basename.startswith(f"mapcanvas_{world_id}_"):
-                raise ValueError(f"Security Block: filename '{basename}' does not match world '{world_id}'.")
+                raise ValueError(
+                    f"Security Block: filename '{basename}' does not match world '{world_id}'."
+                )
 
             os.makedirs(os.path.dirname(canvas_dest), exist_ok=True)
             if os.path.exists(canvas_src):
                 shutil.copy2(canvas_src, canvas_dest)
-                logger.info("Cartography Controller wrote canvas to GCS: %s", canvas_dest)
+                logger.info(
+                    "Cartography Controller wrote canvas to GCS: %s", canvas_dest
+                )
 
         # Save tile MediaAsset
         tile_url = f"http://localhost:8000/gcs_mock/world-engine-atlas/{tile_filename}"
@@ -347,9 +360,14 @@ def cartography_controller_node(ctx: Context, node_input: CanonEntry):
         logger.info("Cartography Controller saved tile MediaAsset: %s", asset_id)
 
         # Update World map image and version
-        canvas_url = f"http://localhost:8000/gcs_mock/world-engine-atlas/{canvas_filename}"
+        canvas_url = (
+            f"http://localhost:8000/gcs_mock/world-engine-atlas/{canvas_filename}"
+        )
         store.save_world_map_image(world_id, canvas_url, canvas_version)
-        logger.info("Cartography Controller updated world map image: %s (v%d)", canvas_url, canvas_version)
+        logger.info(
+            "Cartography Controller updated world map image: %s (v%d)",
+            canvas_url,
+            canvas_version,
+        )
 
     yield Event(output=entry)
-

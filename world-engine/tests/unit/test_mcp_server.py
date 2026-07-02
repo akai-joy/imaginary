@@ -43,7 +43,16 @@ async def test_exposes_exactly_the_read_tools():
 async def test_no_write_tool_is_exposed():
     """Security invariant: canon can only be mutated by the deterministic controller, so
     the MCP surface must expose no create/update/delete/write tool whatsoever."""
-    forbidden = ("save", "write", "create", "update", "delete", "set", "add", "contribute")
+    forbidden = (
+        "save",
+        "write",
+        "create",
+        "update",
+        "delete",
+        "set",
+        "add",
+        "contribute",
+    )
     names = await _tool_names()
     assert not [n for n in names if any(verb in n.lower() for verb in forbidden)]
 

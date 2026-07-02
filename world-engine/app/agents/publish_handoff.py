@@ -196,7 +196,7 @@ Generate a structured JSON response matching the CaptionResponse schema."""
                 "hashtags": asset.hashtags,
                 "contributor_ids": asset.contributor_ids,
                 "created_at": asset.created_at.isoformat(),
-            }
+            },
         }
         processed_jobs.append(job)
 

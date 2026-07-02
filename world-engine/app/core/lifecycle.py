@@ -107,7 +107,9 @@ def tick(store: CanonStore, *, now: datetime | None = None) -> World | None:
             now = now.replace(tzinfo=UTC)
 
         if now >= closes_at:
-            logger.info("tick: world %s has passed its deadline. Auto-closing.", world.id)
+            logger.info(
+                "tick: world %s has passed its deadline. Auto-closing.", world.id
+            )
             close_world(store, world.id, now=now)
             world = store.get_world(world.id)
 
@@ -117,6 +119,7 @@ def tick(store: CanonStore, *, now: datetime | None = None) -> World | None:
             if auto_rollover:
                 try:
                     from app.fast_api_app import enqueue_showcase_task
+
                     enqueue_showcase_task()
                 except Exception as e:
                     logger.error("Failed to fire finale showcase: %s", e)

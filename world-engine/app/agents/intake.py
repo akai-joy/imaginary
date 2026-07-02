@@ -53,10 +53,12 @@ class IngestInput(BaseModel):
         default=None, description="Optional world ID to scope the contribution."
     )
     derived_from: list[str] = Field(
-        default_factory=list, description="Explicit lineage links/parents chosen in the UI."
+        default_factory=list,
+        description="Explicit lineage links/parents chosen in the UI.",
     )
     references: list[str] = Field(
-        default_factory=list, description="Cast/setting reference links chosen in the UI."
+        default_factory=list,
+        description="Cast/setting reference links chosen in the UI.",
     )
 
 
@@ -152,6 +154,7 @@ def intake_router(ctx: Context, node_input: Any):
     if user_text.strip().startswith("{") and user_text.strip().endswith("}"):
         try:
             import json
+
             parsed = json.loads(user_text)
             user_text = parsed.get("user_text", user_text)
             author_id = parsed.get("author_id", author_id)
@@ -195,7 +198,9 @@ def intake_router(ctx: Context, node_input: Any):
 
     # 3. Construct normalized Contribution object
     active_world = get_store().get_active_world()
-    active_world_id = world_id or (active_world.id if active_world else None) or DEFAULT_WORLD_ID
+    active_world_id = (
+        world_id or (active_world.id if active_world else None) or DEFAULT_WORLD_ID
+    )
 
     contrib = Contribution(
         id=str(uuid.uuid4()),

@@ -132,6 +132,7 @@ INJECTION_PATTERNS = [
     r"(?i)skip moderation",
 ]
 
+
 def detect_deterministic_injection(text: str) -> bool:
     """Deterministic scan for prompt injection patterns."""
     if not text:
@@ -206,8 +207,6 @@ async def screen_with_flash_lite(client: genai.Client, text: str) -> tuple[bool,
         return False, "Flash-Lite check skipped"
 
 
-
-
 class SecurityPlugin(BasePlugin):
     """A reusable ADK security plugin implementing advanced safety guardrails."""
 
@@ -270,7 +269,16 @@ class SecurityPlugin(BasePlugin):
                     # 3. Dynamic Wrapping & Scanning of untrusted XML tags
                     # To prevent wrapping trusted system instructions, we look for XML-tagged content.
                     import re
-                    tags = ["user_contribution", "canon_entry", "storyboard", "untrusted_content", "storyline", "media_prompt", "untrusted_data"]
+
+                    tags = [
+                        "user_contribution",
+                        "canon_entry",
+                        "storyboard",
+                        "untrusted_content",
+                        "storyline",
+                        "media_prompt",
+                        "untrusted_data",
+                    ]
 
                     has_untrusted_data = False
                     for tag in tags:
@@ -302,11 +310,12 @@ class SecurityPlugin(BasePlugin):
                             has_untrusted_data = True
 
                         # 3c. Wrap the content inside the XML tags with the spotlight delimiters
-                        def wrap_match(m):
+                        def wrap_match(m, tag=tag):
                             inner_text = m.group(1)
                             if "=== START DATA ===" not in inner_text:
                                 return f"<{tag}>\n=== START DATA ===\n{inner_text.strip()}\n=== END DATA ===\n</{tag}>"
                             return m.group(0)
+
                         text = re.sub(pattern, wrap_match, text)
 
                     # If the prompt does NOT contain any XML-wrapped untrusted content, we treat the entire

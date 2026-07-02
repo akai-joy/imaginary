@@ -17,25 +17,20 @@ import json
 import os
 import sys
 import tempfile
-import uuid
 from datetime import UTC, datetime
 
 import google.auth
 import pytest
-from google.adk.events.event import Event
-from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from app.agent import app as ingest_app
-from app.core.config import load_policy_config
 from app.core.runner_factory import create_runner
 from app.core.store import SQLiteCanonStore
 from app.core.types import (
     DEFAULT_WORLD_ID,
     Contribution,
     ContributionStatus,
-    ShowcaseJob,
     ShowcaseJobStatus,
     Vote,
 )
@@ -89,7 +84,14 @@ def temp_store(monkeypatch):
             pass
 
 
-def run_ingest_contribution(runner, session_id, user_text, author_id="test_user", derived_from=None, references=None):
+def run_ingest_contribution(
+    runner,
+    session_id,
+    user_text,
+    author_id="test_user",
+    derived_from=None,
+    references=None,
+):
     """Helper to route and execute a contribution payload through the ingest pipeline."""
     payload = {
         "user_text": user_text,
@@ -97,15 +99,19 @@ def run_ingest_contribution(runner, session_id, user_text, author_id="test_user"
         "derived_from": derived_from or [],
         "references": references or [],
     }
-    message = types.Content(role="user", parts=[types.Part.from_text(text=json.dumps(payload))])
-    events = list(runner.run(new_message=message, user_id=author_id, session_id=session_id))
-    
+    message = types.Content(
+        role="user", parts=[types.Part.from_text(text=json.dumps(payload))]
+    )
+    events = list(
+        runner.run(new_message=message, user_id=author_id, session_id=session_id)
+    )
+
     # Extract the final output (Contribution object)
     final_contrib = None
     for event in events:
         if event.output and isinstance(event.output, Contribution):
             final_contrib = event.output
-            
+
     return final_contrib, events
 
 
@@ -127,16 +133,22 @@ def test_aggregate_coherence_and_showcase(temp_store, monkeypatch):
         "Character: Alistair the Blue. Alistair is a legendary human wizard residing in Eldoria. "
         "He wears a prominent blue cloak and wields fire magic to protect the local tavern."
     )
-    contrib_a, events_a = run_ingest_contribution(ingest_runner, session.id, desc_a)
+    contrib_a, _events_a = run_ingest_contribution(ingest_runner, session.id, desc_a)
 
-    assert contrib_a is not None, "Pipeline failed to produce Contribution object for original case."
-    assert contrib_a.status == ContributionStatus.ACCEPTED, f"Original character rejected: {contrib_a.status}"
-    
+    assert contrib_a is not None, (
+        "Pipeline failed to produce Contribution object for original case."
+    )
+    assert contrib_a.status == ContributionStatus.ACCEPTED, (
+        f"Original character rejected: {contrib_a.status}"
+    )
+
     # Retrieve saved canon entry
     canon_a_id = f"canon_{contrib_a.id}"
     canon_a = temp_store.get_canon_entry(canon_a_id)
     assert canon_a is not None, "CanonEntry not written to store by controller."
-    assert not canon_a.derived_from, "Original entry should not have derived_from parents."
+    assert not canon_a.derived_from, (
+        "Original entry should not have derived_from parents."
+    )
     print(f"-> Allowed and saved original: {canon_a.id} ({canon_a.title})")
 
     # 2. Ingest Case B (Coherent Derivative)
@@ -146,21 +158,31 @@ def test_aggregate_coherence_and_showcase(temp_store, monkeypatch):
         "wearing his blue cloak and casts a small fire spell to light the hearth."
     )
     # Simulate UI-supplied reference link and lineage fork
-    contrib_b, events_b = run_ingest_contribution(
-        ingest_runner, session.id, desc_b, derived_from=[canon_a_id], references=[canon_a_id]
+    contrib_b, _events_b = run_ingest_contribution(
+        ingest_runner,
+        session.id,
+        desc_b,
+        derived_from=[canon_a_id],
+        references=[canon_a_id],
     )
 
     assert contrib_b is not None
-    assert contrib_b.status == ContributionStatus.ACCEPTED, f"Derivative story beat rejected: {contrib_b.status}"
-    
+    assert contrib_b.status == ContributionStatus.ACCEPTED, (
+        f"Derivative story beat rejected: {contrib_b.status}"
+    )
+
     canon_b_id = f"canon_{contrib_b.id}"
     canon_b = temp_store.get_canon_entry(canon_b_id)
     assert canon_b is not None
-    assert canon_a_id in canon_b.derived_from, "Controller should honour and save UI lineage."
-    
+    assert canon_a_id in canon_b.derived_from, (
+        "Controller should honour and save UI lineage."
+    )
+
     # Provenance verification: Provenance LLM should have identified canon_a as a reference
     # and appended it to references (even if UI didn't pass it, but here we verified it matches).
-    assert canon_a_id in contrib_b.references, "Provenance failed to link soft references."
+    assert canon_a_id in contrib_b.references, (
+        "Provenance failed to link soft references."
+    )
     print(f"-> Allowed and saved derivative: {canon_b.id} referencing {canon_a_id}")
 
     # 3. Ingest Case C (Contradictory Contribution)
@@ -170,13 +192,19 @@ def test_aggregate_coherence_and_showcase(temp_store, monkeypatch):
         "a wizard, hates magic, and has never been to Eldoria."
     )
     # User attempts to fork from the Alistair story tree
-    contrib_c, events_c = run_ingest_contribution(
-        ingest_runner, session.id, desc_c, derived_from=[canon_b_id], references=[canon_b_id]
+    contrib_c, _events_c = run_ingest_contribution(
+        ingest_runner,
+        session.id,
+        desc_c,
+        derived_from=[canon_b_id],
+        references=[canon_b_id],
     )
 
     assert contrib_c is not None
     # Continuity agent should catch contradiction and reject it
-    assert contrib_c.status == ContributionStatus.REJECTED, "Contradictory beat was incorrectly allowed."
+    assert contrib_c.status == ContributionStatus.REJECTED, (
+        "Contradictory beat was incorrectly allowed."
+    )
     print(f"-> Successfully caught contradiction and rejected: {contrib_c.id}")
 
     # 4. Ingest Case D (Safety Violation)
@@ -185,23 +213,29 @@ def test_aggregate_coherence_and_showcase(temp_store, monkeypatch):
         "Plot: Alistair makes illegal weapons and bombs using gunpowder and household chemicals "
         "in his tavern room."
     )
-    contrib_d, events_d = run_ingest_contribution(ingest_runner, session.id, desc_d)
+    contrib_d, _events_d = run_ingest_contribution(ingest_runner, session.id, desc_d)
 
     assert contrib_d is not None
     # Moderation agent should catch safety violation and block
-    assert contrib_d.status in (ContributionStatus.BLOCKED, ContributionStatus.FLAGGED), (
-        "Inappropriate/dangerous beat was allowed."
-    )
+    assert contrib_d.status in (
+        ContributionStatus.BLOCKED,
+        ContributionStatus.FLAGGED,
+    ), "Inappropriate/dangerous beat was allowed."
     print(f"-> Successfully caught safety violation and blocked: {contrib_d.id}")
 
     # 5. Showcase Trigger and Tally Execution
     print("\n[Step 5] Triggering Showcase Subgraph...")
     # Force ledger entries to have high scores (e.g. 90) to pass the min_composite_score threshold of 70
     import sqlite3
+
     with sqlite3.connect(temp_store.db_path) as conn:
-        conn.execute("DELETE FROM ledger_entries WHERE contribution_id IN (?, ?)", (contrib_a.id, contrib_b.id))
+        conn.execute(
+            "DELETE FROM ledger_entries WHERE contribution_id IN (?, ?)",
+            (contrib_a.id, contrib_b.id),
+        )
 
     from app.core.types import LedgerEntry
+
     temp_store.save_ledger_entry(
         LedgerEntry(
             contribution_id=contrib_a.id,
@@ -224,7 +258,9 @@ def test_aggregate_coherence_and_showcase(temp_store, monkeypatch):
     points_a = temp_store.get_points_for_contribution(contrib_a.id)
     points_b = temp_store.get_points_for_contribution(contrib_b.id)
     print(f"Ledger scores: {canon_a_id}={points_a}, {canon_b_id}={points_b}")
-    assert points_a >= 70 and points_b >= 70, "Ledger points not saved or overridden correctly."
+    assert points_a >= 70 and points_b >= 70, (
+        "Ledger points not saved or overridden correctly."
+    )
 
     for i in range(12):
         temp_store.save_vote(
@@ -239,11 +275,17 @@ def test_aggregate_coherence_and_showcase(temp_store, monkeypatch):
         )
 
     # Run the Showcase workflow
-    showcase_session = session_service.create_session_sync(user_id="system", app_name="showcase")
+    showcase_session = session_service.create_session_sync(
+        user_id="system", app_name="showcase"
+    )
     showcase_runner = create_runner(showcase_app, session_service)
 
     message = types.Content(role="user", parts=[types.Part.from_text(text="run")])
-    showcase_events = list(showcase_runner.run(new_message=message, user_id="system", session_id=showcase_session.id))
+    list(
+        showcase_runner.run(
+            new_message=message, user_id="system", session_id=showcase_session.id
+        )
+    )
 
     # Verify that the showcase job was created and ran successfully
     jobs = temp_store.list_showcase_jobs()
@@ -251,7 +293,9 @@ def test_aggregate_coherence_and_showcase(temp_store, monkeypatch):
     job = jobs[0]
     assert job.tree_id == canon_a_id, "Showcase job tree ID mismatch."
     assert job.media_type == "reel", "Single top tree should be formatted as a Reel."
-    assert job.status == ShowcaseJobStatus.PUBLISHED_MOCK, f"Showcase job failed to complete: {job.status}"
+    assert job.status == ShowcaseJobStatus.PUBLISHED_MOCK, (
+        f"Showcase job failed to complete: {job.status}"
+    )
 
     # Verify MediaAsset generated and saved in database
     assets = temp_store.list_media_assets()
@@ -261,7 +305,9 @@ def test_aggregate_coherence_and_showcase(temp_store, monkeypatch):
     assert reel_asset.job_id == job.id
     assert reel_asset.tree_id == canon_a_id
     assert "AI-generated" in reel_asset.caption
-    print(f"-> Showcase job completed: {job.id} (media={job.media_type}, status={job.status})")
+    print(
+        f"-> Showcase job completed: {job.id} (media={job.media_type}, status={job.status})"
+    )
     print(f"-> Media asset saved: {reel_asset.id} (url={reel_asset.gcs_url})")
 
     # Clean up mock artifacts

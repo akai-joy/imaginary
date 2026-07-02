@@ -37,9 +37,11 @@ def temp_store(monkeypatch):
         if os.path.exists(path):
             os.remove(path)
 
+
 class SimpleContext:
     def __init__(self):
         self.state = {}
+
 
 def test_atlas_node_skips_non_locations(temp_store):
     ctx = SimpleContext()
@@ -50,13 +52,14 @@ def test_atlas_node_skips_non_locations(temp_store):
         title="Merlin",
         body="A wizard.",
         contributor_id="user_a",
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
 
     events = list(atlas_node(ctx, entry))
     assert len(events) == 1
     assert events[0].output == entry
     assert "cartography_proposal" not in ctx.state
+
 
 def test_atlas_node_skips_unplaced_locations(temp_store):
     ctx = SimpleContext()
@@ -67,13 +70,14 @@ def test_atlas_node_skips_unplaced_locations(temp_store):
         title="Unplaced City",
         body="A city.",
         contributor_id="user_a",
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
 
     events = list(atlas_node(ctx, entry))
     assert len(events) == 1
     assert events[0].output == entry
     assert "cartography_proposal" not in ctx.state
+
 
 def test_atlas_node_success(temp_store, monkeypatch):
     cache_file = os.path.join("cache", "maptile_loc_placed_v1.png")
@@ -91,7 +95,7 @@ def test_atlas_node_success(temp_store, monkeypatch):
         theme="Medieval Wizards",
         opening_line="The wizard ran.",
         art_style_directive="Storybook watercolor",
-        status=WorldStatus.ACTIVE
+        status=WorldStatus.ACTIVE,
     )
     temp_store.save_world(w)
 
@@ -103,22 +107,26 @@ def test_atlas_node_success(temp_store, monkeypatch):
         body="City of magic.",
         contributor_id="user_a",
         map_meta=MapMeta(x=20.0, y=30.0, region="Highlands", near=[]),
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
 
     call_count = 0
+
     def mock_generate_imagen(client, prompt, scene_num):
         nonlocal call_count
         call_count += 1
         import io
 
         from PIL import Image
+
         img = Image.new("RGBA", (100, 100), (255, 0, 0, 255))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         return buf.getvalue()
 
-    monkeypatch.setattr("app.agents.atlas_illustrator.generate_imagen_panel", mock_generate_imagen)
+    monkeypatch.setattr(
+        "app.agents.atlas_illustrator.generate_imagen_panel", mock_generate_imagen
+    )
 
     ctx = SimpleContext()
     events = list(atlas_node(ctx, entry))
@@ -150,12 +158,13 @@ def test_atlas_node_success(temp_store, monkeypatch):
     if os.path.exists(basemap_cache_file):
         os.remove(basemap_cache_file)
 
+
 def test_cartography_controller_and_prefix_checks(temp_store):
     for path in [
         "cache/fake_tile.png",
         "cache/fake_canvas.png",
         "gcs_mock/world-engine-atlas/maptile_loc_placed_v1.png",
-        "gcs_mock/world-engine-atlas/mapcanvas_world_genesis_v2.png"
+        "gcs_mock/world-engine-atlas/mapcanvas_world_genesis_v2.png",
     ]:
         if os.path.exists(path):
             os.remove(path)
@@ -165,7 +174,7 @@ def test_cartography_controller_and_prefix_checks(temp_store):
         theme="Medieval Wizards",
         opening_line="The wizard ran.",
         art_style_directive="Storybook watercolor",
-        status=WorldStatus.ACTIVE
+        status=WorldStatus.ACTIVE,
     )
     temp_store.save_world(w)
 
@@ -177,7 +186,7 @@ def test_cartography_controller_and_prefix_checks(temp_store):
         body="City of magic.",
         contributor_id="user_a",
         map_meta=MapMeta(x=20.0, y=30.0, region="Highlands", near=[]),
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
 
     ctx_bad_prefix = SimpleContext()
@@ -192,7 +201,7 @@ def test_cartography_controller_and_prefix_checks(temp_store):
         "canvas_src_path": "cache/canvas.png",
         "canvas_dest_path": "gcs_mock/world-engine-atlas/mapcanvas_world_genesis_v2.png",
         "canvas_filename": "mapcanvas_world_genesis_v2.png",
-        "canvas_version": 2
+        "canvas_version": 2,
     }
 
     with pytest.raises(ValueError) as exc:
@@ -211,7 +220,7 @@ def test_cartography_controller_and_prefix_checks(temp_store):
         "canvas_src_path": "cache/canvas.png",
         "canvas_dest_path": "gcs_mock/world-engine-atlas/mapcanvas_world_genesis_v2.png",
         "canvas_filename": "mapcanvas_world_genesis_v2.png",
-        "canvas_version": 2
+        "canvas_version": 2,
     }
 
     with pytest.raises(ValueError) as exc:
@@ -236,7 +245,7 @@ def test_cartography_controller_and_prefix_checks(temp_store):
         "canvas_src_path": "cache/fake_canvas.png",
         "canvas_dest_path": "gcs_mock/world-engine-atlas/mapcanvas_world_genesis_v2.png",
         "canvas_filename": "mapcanvas_world_genesis_v2.png",
-        "canvas_version": 2
+        "canvas_version": 2,
     }
 
     list(cartography_controller_node(ctx_ok, entry))
@@ -245,7 +254,10 @@ def test_cartography_controller_and_prefix_checks(temp_store):
     assert os.path.exists("gcs_mock/world-engine-atlas/mapcanvas_world_genesis_v2.png")
 
     loaded_w = temp_store.get_world("world_genesis")
-    assert loaded_w.map_image_url == "http://localhost:8000/gcs_mock/world-engine-atlas/mapcanvas_world_genesis_v2.png"
+    assert (
+        loaded_w.map_image_url
+        == "http://localhost:8000/gcs_mock/world-engine-atlas/mapcanvas_world_genesis_v2.png"
+    )
     assert loaded_w.map_image_version == 2
 
     assets = temp_store.list_media_assets()

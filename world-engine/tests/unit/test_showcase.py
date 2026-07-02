@@ -178,6 +178,7 @@ def test_showcase_tally_node_emits_jobs(monkeypatch):
         events = list(showcase_tally_node(ctx, "run"))
 
         from app.core.controller import showcase_controller_node
+
         list(showcase_controller_node(ctx, events[1].output))
 
         # Verify events
@@ -264,6 +265,7 @@ def test_storyboard_node_success(monkeypatch):
         events = list(storyboard_node(ctx, [job]))
 
         from app.core.controller import showcase_controller_node
+
         list(showcase_controller_node(ctx, events[1].output))
 
         # Verify output
@@ -333,6 +335,7 @@ def test_storyboard_node_blocked(monkeypatch):
         events = list(storyboard_node(ctx, [job]))
 
         from app.core.controller import showcase_controller_node
+
         list(showcase_controller_node(ctx, events[1].output))
 
         # Verify output
@@ -375,6 +378,7 @@ def test_media_node_comic(monkeypatch):
         events = list(media_node(ctx, [job]))
 
         from app.core.controller import showcase_controller_node
+
         list(showcase_controller_node(ctx, events[1].output))
 
         assert len(events) == 2
@@ -424,6 +428,7 @@ def test_media_node_reel(monkeypatch):
         events = list(media_node(ctx, [job]))
 
         from app.core.controller import showcase_controller_node
+
         list(showcase_controller_node(ctx, events[1].output))
 
         assert len(events) == 2
@@ -490,6 +495,7 @@ def test_publish_handoff_node(monkeypatch):
         events = list(publish_handoff_node(ctx, [job]))
 
         from app.core.controller import showcase_controller_node
+
         list(showcase_controller_node(ctx, events[1].output))
 
         assert len(events) == 2

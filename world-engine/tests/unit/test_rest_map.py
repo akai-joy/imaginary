@@ -41,18 +41,22 @@ def temp_store():
         if os.path.exists(path):
             os.remove(path)
 
+
 @pytest.fixture
 def client(temp_store, monkeypatch):
     # Monkeypatch the get_store dependency / helper
     monkeypatch.setattr("app.fast_api_app.get_store", lambda: temp_store)
+
     # Monkeypatch the get_user_id_from_token helper to return a deterministic user ID
     # based on the Bearer token content.
     def mock_get_user_id(authorization: str | None, strict: bool = False) -> str:
         if not authorization or not authorization.startswith("Bearer "):
             return "playground_user"
         return authorization.replace("Bearer ", "")
+
     monkeypatch.setattr("app.fast_api_app.get_user_id_from_token", mock_get_user_id)
     return TestClient(app)
+
 
 def test_world_map_endpoint(client, temp_store):
     # 1. Seed active world
@@ -61,7 +65,7 @@ def test_world_map_endpoint(client, temp_store):
         theme="Medieval Wizards",
         opening_line="A wizard's quest begins.",
         art_style_directive="Storybook",
-        status=WorldStatus.ACTIVE
+        status=WorldStatus.ACTIVE,
     )
     temp_store.save_world(w)
 
@@ -75,7 +79,7 @@ def test_world_map_endpoint(client, temp_store):
         body="A magical city.",
         contributor_id="user_b",
         map_meta=MapMeta(x=10.0, y=20.0, region="Plains", near=["canon_loc2"]),
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
     # Loc 2: Discovered because contributor_id == caller
     loc2 = CanonEntry(
@@ -86,7 +90,7 @@ def test_world_map_endpoint(client, temp_store):
         body="Dark forest.",
         contributor_id="user_a",
         map_meta=MapMeta(x=15.0, y=-5.0, region="Forest", near=["canon_loc1"]),
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
     # Loc 3: Fogged (not discovered by user_a, different contributor)
     loc3 = CanonEntry(
@@ -97,7 +101,7 @@ def test_world_map_endpoint(client, temp_store):
         body="Old ruins.",
         contributor_id="user_b",
         map_meta=None,  # Uncharted location
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
     # Loc 4: Belongs to another world, should NOT be returned
     loc4 = CanonEntry(
@@ -108,7 +112,7 @@ def test_world_map_endpoint(client, temp_store):
         body="Pirate cove.",
         contributor_id="user_a",
         map_meta=MapMeta(x=1.0, y=1.0, region="Ocean", near=[]),
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
 
     temp_store.save_canon_entry(loc1)
@@ -158,9 +162,15 @@ def test_world_map_endpoint(client, temp_store):
     # Verify regions list contains unique sorted region names
     assert data["regions"] == ["Forest", "Plains"]
 
+
 def test_codex_endpoints(client, temp_store):
     # Seed active world
-    w = World(id="world_genesis", theme="Wizards", opening_line="Line", status=WorldStatus.ACTIVE)
+    w = World(
+        id="world_genesis",
+        theme="Wizards",
+        opening_line="Line",
+        status=WorldStatus.ACTIVE,
+    )
     temp_store.save_world(w)
 
     # Seed beasts in active world
@@ -171,7 +181,7 @@ def test_codex_endpoints(client, temp_store):
         title="Griffin",
         body="Half eagle, half lion.",
         contributor_id="user_b",
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
     # Seed beast in another world
     beast2 = CanonEntry(
@@ -181,7 +191,7 @@ def test_codex_endpoints(client, temp_store):
         title="Kraken",
         body="Giant squid.",
         contributor_id="user_b",
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
     temp_store.save_canon_entry(beast1)
     temp_store.save_canon_entry(beast2)
@@ -198,8 +208,14 @@ def test_codex_endpoints(client, temp_store):
     response = client.get("/codex/bogus")
     assert response.status_code == 404
 
+
 def test_canon_detail_endpoint(client, temp_store):
-    w = World(id="world_genesis", theme="Wizards", opening_line="Line", status=WorldStatus.ACTIVE)
+    w = World(
+        id="world_genesis",
+        theme="Wizards",
+        opening_line="Line",
+        status=WorldStatus.ACTIVE,
+    )
     temp_store.save_world(w)
 
     # Seed canon entry
@@ -211,7 +227,7 @@ def test_canon_detail_endpoint(client, temp_store):
         body="A magical city.",
         contributor_id="user_b",
         map_meta=MapMeta(x=10.0, y=20.0, region="Plains", near=[]),
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
 
     # beast referencing loc1
@@ -223,7 +239,7 @@ def test_canon_detail_endpoint(client, temp_store):
         body="Lives in Eldoria.",
         contributor_id="user_b",
         references=["canon_loc1"],
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
 
     # loc2 referenced by loc1
@@ -234,7 +250,7 @@ def test_canon_detail_endpoint(client, temp_store):
         title="Castle",
         body="Main fortress.",
         contributor_id="user_b",
-        created_at=datetime.now(UTC)
+        created_at=datetime.now(UTC),
     )
     loc1.references = ["canon_loc2"]
 
@@ -243,7 +259,9 @@ def test_canon_detail_endpoint(client, temp_store):
     temp_store.save_canon_entry(loc2)
 
     # Call canon detail for loc1
-    response = client.get("/canon/canon_loc1", headers={"Authorization": "Bearer user_a"})
+    response = client.get(
+        "/canon/canon_loc1", headers={"Authorization": "Bearer user_a"}
+    )
     assert response.status_code == 200
     data = response.json()
 
@@ -263,14 +281,20 @@ def test_canon_detail_endpoint(client, temp_store):
     response = client.get("/canon/canon_nonexistent")
     assert response.status_code == 404
 
+
 def test_discover_endpoint(client, temp_store):
-    w = World(id="world_genesis", theme="Wizards", opening_line="Line", status=WorldStatus.ACTIVE)
+    w = World(
+        id="world_genesis",
+        theme="Wizards",
+        opening_line="Line",
+        status=WorldStatus.ACTIVE,
+    )
     temp_store.save_world(w)
 
     response = client.post(
         "/discover",
         json={"canon_id": "canon_loc1"},
-        headers={"Authorization": "Bearer user_a"}
+        headers={"Authorization": "Bearer user_a"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -284,10 +308,11 @@ def test_discover_endpoint(client, temp_store):
     response2 = client.post(
         "/discover",
         json={"canon_id": "canon_loc1"},
-        headers={"Authorization": "Bearer user_a"}
+        headers={"Authorization": "Bearer user_a"},
     )
     assert response2.status_code == 200
     assert response2.json()["discovered"] is True
+
 
 def test_contribute_endpoint_payload(client, monkeypatch):
     captured_input_data = None
@@ -297,12 +322,13 @@ def test_contribute_endpoint_payload(client, monkeypatch):
             self.id = "mock_session_id"
             self.state = {
                 "scoring_proposal": {"points_delta": 10, "reason": "Good job"},
-                "narrator_proposal": {"new_entry": {"id": "canon_new_123"}}
+                "narrator_proposal": {"new_entry": {"id": "canon_new_123"}},
             }
 
     class MockSessionService:
         def create_session_sync(self, user_id, app_name):
             return MockSession()
+
         def get_session_sync(self, user_id, session_id, app_name):
             return MockSession()
 
@@ -311,12 +337,17 @@ def test_contribute_endpoint_payload(client, monkeypatch):
             nonlocal captured_input_data
             # Extract captured data from new_message parts
             import json
+
             captured_input_data = json.loads(new_message.parts[0].text)
             return []  # Return empty list of events for success
 
-    monkeypatch.setattr("google.adk.sessions.InMemorySessionService", MockSessionService)
+    monkeypatch.setattr(
+        "google.adk.sessions.InMemorySessionService", MockSessionService
+    )
     # Since create_runner is imported and called inside post_contribute, let's mock it
-    monkeypatch.setattr("app.core.runner_factory.create_runner", lambda app, service: MockRunner())
+    monkeypatch.setattr(
+        "app.core.runner_factory.create_runner", lambda app, service: MockRunner()
+    )
 
     payload = {
         "title": "A New Hero",
@@ -324,13 +355,11 @@ def test_contribute_endpoint_payload(client, monkeypatch):
         "body": "A brave warrior.",
         "derived_from": ["parent_1"],
         "references": ["place_1"],
-        "world_id": "world_pirates"
+        "world_id": "world_pirates",
     }
 
     response = client.post(
-        "/contribute",
-        json=payload,
-        headers={"Authorization": "Bearer tester"}
+        "/contribute", json=payload, headers={"Authorization": "Bearer tester"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -342,4 +371,3 @@ def test_contribute_endpoint_payload(client, monkeypatch):
     assert captured_input_data["world_id"] == "world_pirates"
     assert captured_input_data["derived_from"] == ["parent_1"]
     assert captured_input_data["references"] == ["place_1"]
-

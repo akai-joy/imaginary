@@ -68,6 +68,7 @@ def _ctx_with_accepted(entry_id):
 
 # --- node: pass-through cases (no LLM call) --------------------------------
 
+
 def test_non_spatial_type_passes_through(store, monkeypatch):
     monkeypatch.setattr(cart_mod, "get_store", lambda: store)
     client = _mock_llm(monkeypatch, "{}")
@@ -82,7 +83,9 @@ def test_non_spatial_type_passes_through(store, monkeypatch):
 def test_blocked_contribution_passes_through(store, monkeypatch):
     monkeypatch.setattr(cart_mod, "get_store", lambda: store)
     client = _mock_llm(monkeypatch, "{}")
-    contrib = Contribution(id="c1", author_id="u1", type="location", title="t", body="b")
+    contrib = Contribution(
+        id="c1", author_id="u1", type="location", title="t", body="b"
+    )
 
     ctx = MagicMock()
     ctx.state = {}  # narrator did not accept -> no new_entry
@@ -95,7 +98,9 @@ def test_blocked_contribution_passes_through(store, monkeypatch):
 def test_entity_with_no_places_is_not_placed(store, monkeypatch):
     monkeypatch.setattr(cart_mod, "get_store", lambda: store)
     client = _mock_llm(monkeypatch, "{}")
-    contrib = Contribution(id="c1", author_id="u1", type="character", title="Hero", body="b")
+    contrib = Contribution(
+        id="c1", author_id="u1", type="character", title="Hero", body="b"
+    )
 
     ctx = _ctx_with_accepted("canon_c1")
     list(cart_mod.cartographer_node(ctx, contrib))
@@ -106,6 +111,7 @@ def test_entity_with_no_places_is_not_placed(store, monkeypatch):
 
 # --- node: placement proposals --------------------------------------------
 
+
 def test_location_placement_proposed(store, monkeypatch):
     monkeypatch.setattr(cart_mod, "get_store", lambda: store)
     _place(store, "canon_eldoria", "Heartlands", 50, 50)
@@ -114,7 +120,9 @@ def test_location_placement_proposed(store, monkeypatch):
         '{"region": "The Frostmark", "x": 20, "y": 80, '
         '"near": ["canon_eldoria"], "located_in": ""}',
     )
-    contrib = Contribution(id="c1", author_id="u1", type="location", title="Frostpeak", body="cold")
+    contrib = Contribution(
+        id="c1", author_id="u1", type="location", title="Frostpeak", body="cold"
+    )
 
     ctx = _ctx_with_accepted("canon_c1")
     list(cart_mod.cartographer_node(ctx, contrib))
@@ -133,7 +141,9 @@ def test_location_near_filters_hallucinated_ids(store, monkeypatch):
         '{"region": "X", "x": 10, "y": 10, '
         '"near": ["canon_eldoria", "canon_made_up"], "located_in": ""}',
     )
-    contrib = Contribution(id="c1", author_id="u1", type="location", title="New", body="b")
+    contrib = Contribution(
+        id="c1", author_id="u1", type="location", title="New", body="b"
+    )
 
     ctx = _ctx_with_accepted("canon_c1")
     list(cart_mod.cartographer_node(ctx, contrib))
@@ -149,7 +159,9 @@ def test_entity_located_in_proposed(store, monkeypatch):
         monkeypatch,
         '{"region": "", "x": 50, "y": 50, "near": [], "located_in": "canon_eldoria"}',
     )
-    contrib = Contribution(id="c1", author_id="u1", type="beast", title="Drake", body="b")
+    contrib = Contribution(
+        id="c1", author_id="u1", type="beast", title="Drake", body="b"
+    )
 
     ctx = _ctx_with_accepted("canon_c1")
     list(cart_mod.cartographer_node(ctx, contrib))
@@ -166,7 +178,9 @@ def test_entity_invalid_located_in_dropped(store, monkeypatch):
         monkeypatch,
         '{"region": "", "x": 50, "y": 50, "near": [], "located_in": "canon_nope"}',
     )
-    contrib = Contribution(id="c1", author_id="u1", type="spell", title="Firebolt", body="b")
+    contrib = Contribution(
+        id="c1", author_id="u1", type="spell", title="Firebolt", body="b"
+    )
 
     ctx = _ctx_with_accepted("canon_c1")
     list(cart_mod.cartographer_node(ctx, contrib))
@@ -175,6 +189,7 @@ def test_entity_invalid_located_in_dropped(store, monkeypatch):
 
 
 # --- controller: applies the proposal + clamps -----------------------------
+
 
 def _run_controller(store, monkeypatch, contrib, cartographer_proposal):
     monkeypatch.setattr(controller_mod, "get_store", lambda: store)
@@ -200,7 +215,9 @@ def _run_controller(store, monkeypatch, contrib, cartographer_proposal):
 
 
 def test_controller_writes_map_meta_and_clamps_coords(store, monkeypatch):
-    contrib = Contribution(id="loc1", author_id="u1", type="location", title="Edge", body="b")
+    contrib = Contribution(
+        id="loc1", author_id="u1", type="location", title="Edge", body="b"
+    )
     saved = _run_controller(
         store,
         monkeypatch,
@@ -212,13 +229,15 @@ def test_controller_writes_map_meta_and_clamps_coords(store, monkeypatch):
     )
     assert saved.map_meta is not None
     assert saved.map_meta.x == 100.0  # clamped from 999
-    assert saved.map_meta.y == 0.0    # clamped from -50
+    assert saved.map_meta.y == 0.0  # clamped from -50
     assert saved.map_meta.region == "Verge"
     assert saved.map_meta.near == ["canon_x"]
 
 
 def test_controller_anchors_entity_via_reference(store, monkeypatch):
-    contrib = Contribution(id="beast1", author_id="u1", type="beast", title="Drake", body="b")
+    contrib = Contribution(
+        id="beast1", author_id="u1", type="beast", title="Drake", body="b"
+    )
     saved = _run_controller(
         store,
         monkeypatch,

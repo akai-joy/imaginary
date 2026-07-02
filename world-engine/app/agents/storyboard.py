@@ -116,7 +116,7 @@ def storyboard_node(ctx: Context, node_input: list[ShowcaseJob]):
         if not member_ids:
             logger.warning(
                 "No canon entries found for tree %s. Blocking job.", job.tree_id
-              )
+            )
             job.status = ShowcaseJobStatus.BLOCKED
             ctx.state["storyboard_proposal"][job.id] = {
                 "status": ShowcaseJobStatus.BLOCKED.value,
@@ -306,9 +306,7 @@ Storyboard to evaluate:
                 "storyboard_json": job.storyboard_json,
             }
 
-            logger.info(
-                "Successfully proposed storyboard for job %s", job.id
-            )
+            logger.info("Successfully proposed storyboard for job %s", job.id)
 
             scenes_text = []
             for scene in storyboard.scenes:

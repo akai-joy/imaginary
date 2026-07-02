@@ -24,7 +24,7 @@ DEFAULT_WORLD_ID = "world_genesis"
 
 
 class WorldStatus(StrEnum):
-    ACTIVE = "active"      # contribution window open
+    ACTIVE = "active"  # contribution window open
     ARCHIVED = "archived"  # window closed; read-only collectible
 
 
@@ -179,7 +179,7 @@ class StoryboardScene(BaseModel):
     )
     optimized_prompt: str | None = Field(
         default=None,
-        description="Detailed cinematic prompt optimized for image/video generation tools."
+        description="Detailed cinematic prompt optimized for image/video generation tools.",
     )
 
 

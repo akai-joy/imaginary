@@ -217,6 +217,7 @@ class SQLiteCanonStore(CanonStore):
                     map_meta_json TEXT
                 )
             """)
+
             # Self-healing migration: add Living-World columns to pre-existing tables.
             # (ALTER ... ADD COLUMN appends to the end; SELECTs use named columns so order
             # never matters.)
@@ -376,7 +377,6 @@ class SQLiteCanonStore(CanonStore):
             map_image_version=row[10] if len(row) > 10 else 1,
         )
 
-
     # --- Worlds (themed seasonal drops) ---
     def save_world(self, world: World) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -438,7 +438,6 @@ class SQLiteCanonStore(CanonStore):
             )
             row = cursor.fetchone()
             return self._row_to_world(row) if row else None
-
 
     # --- Contributions (raw user submissions) ---
     def save_contribution(self, contribution: Contribution) -> None:
@@ -511,7 +510,6 @@ class SQLiteCanonStore(CanonStore):
             world_id=row[10] or DEFAULT_WORLD_ID,
         )
 
-
     # --- Canon entries (accepted, versioned lore) ---
     def save_canon_entry(self, entry: CanonEntry) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -550,7 +548,6 @@ class SQLiteCanonStore(CanonStore):
             if not row:
                 return None
             return self._row_to_canon(row)
-
 
     # --- Ledger (simulated points economy) ---
     def save_ledger_entry(self, entry: LedgerEntry) -> None:
@@ -648,7 +645,6 @@ class SQLiteCanonStore(CanonStore):
             cursor.execute(sql, params)
             return [self._row_to_canon(row) for row in cursor.fetchall()]
 
-
     # --- Discoveries (per-user fog-of-war) ---
     def save_discovery(self, user_id: str, canon_id: str) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -668,7 +664,6 @@ class SQLiteCanonStore(CanonStore):
                 "SELECT canon_id FROM discoveries WHERE user_id = ?", (user_id,)
             )
             return {row[0] for row in cursor.fetchall()}
-
 
     # --- Votes (one per user per storyline tree) ---
     def save_vote(self, vote: Vote) -> None:
@@ -713,7 +708,6 @@ class SQLiteCanonStore(CanonStore):
                 )
                 for row in rows
             ]
-
 
     # --- Showcase jobs (async media generation) ---
     def save_showcase_job(self, job: ShowcaseJob) -> None:
@@ -797,7 +791,6 @@ class SQLiteCanonStore(CanonStore):
             row = cursor.fetchone()
             return row[0] if row and row[0] is not None else 0
 
-
     # --- Media assets (generated comics/reels/tiles) ---
     def save_media_asset(self, asset: MediaAsset) -> None:
         with sqlite3.connect(self.db_path) as conn:
@@ -877,12 +870,13 @@ class FirestoreCanonStore(CanonStore):
             moderation_profile=d.get("moderation_profile", "default"),
             status=d["status"],
             opens_at=datetime.fromisoformat(d["opens_at"]),
-            closes_at=datetime.fromisoformat(d["closes_at"]) if d.get("closes_at") else None,
+            closes_at=datetime.fromisoformat(d["closes_at"])
+            if d.get("closes_at")
+            else None,
             created_at=datetime.fromisoformat(d["created_at"]),
             map_image_url=d.get("map_image_url"),
             map_image_version=d.get("map_image_version", 1),
         )
-
 
     # --- Worlds (themed seasonal drops) ---
     def save_world(self, world: World) -> None:
@@ -902,10 +896,12 @@ class FirestoreCanonStore(CanonStore):
         self.client.collection("worlds").document(world.id).set(data)
 
     def save_world_map_image(self, world_id: str, url: str, version: int) -> None:
-        self.client.collection("worlds").document(world_id).update({
-            "map_image_url": url,
-            "map_image_version": version,
-        })
+        self.client.collection("worlds").document(world_id).update(
+            {
+                "map_image_url": url,
+                "map_image_version": version,
+            }
+        )
 
     def get_world(self, world_id: str) -> World | None:
         doc = self.client.collection("worlds").document(world_id).get()
@@ -919,7 +915,6 @@ class FirestoreCanonStore(CanonStore):
     def get_active_world(self) -> World | None:
         active = [w for w in self.list_worlds() if w.status == WorldStatus.ACTIVE]
         return active[0] if active else None
-
 
     # --- Contributions (raw user submissions) ---
     def save_contribution(self, contribution: Contribution) -> None:
@@ -970,7 +965,6 @@ class FirestoreCanonStore(CanonStore):
             map_meta=MapMeta(**map_meta) if map_meta else None,
         )
 
-
     # --- Canon entries (accepted, versioned lore) ---
     def save_canon_entry(self, entry: CanonEntry) -> None:
         data = {
@@ -993,7 +987,6 @@ class FirestoreCanonStore(CanonStore):
         if not doc.exists:
             return None
         return self._doc_to_canon(doc.to_dict())
-
 
     # --- Ledger (simulated points economy) ---
     def save_ledger_entry(self, entry: LedgerEntry) -> None:
@@ -1039,7 +1032,6 @@ class FirestoreCanonStore(CanonStore):
             query = query.where("world_id", "==", world_id)
         return [self._doc_to_canon(doc.to_dict()) for doc in query.stream()]
 
-
     # --- Discoveries (per-user fog-of-war) ---
     def save_discovery(self, user_id: str, canon_id: str) -> None:
         data = {
@@ -1047,7 +1039,9 @@ class FirestoreCanonStore(CanonStore):
             "canon_id": canon_id,
             "created_at": datetime.now(UTC).isoformat(),
         }
-        self.client.collection("discoveries").document(f"{user_id}__{canon_id}").set(data)
+        self.client.collection("discoveries").document(f"{user_id}__{canon_id}").set(
+            data
+        )
 
     def list_discoveries(self, user_id: str) -> set[str]:
         docs = (
@@ -1075,7 +1069,6 @@ class FirestoreCanonStore(CanonStore):
             if match:
                 results.append(entry)
         return results
-
 
     # --- Votes (one per user per storyline tree) ---
     def save_vote(self, vote: Vote) -> None:
@@ -1105,7 +1098,6 @@ class FirestoreCanonStore(CanonStore):
                 )
             )
         return results
-
 
     # --- Showcase jobs (async media generation) ---
     def save_showcase_job(self, job: ShowcaseJob) -> None:
@@ -1165,7 +1157,6 @@ class FirestoreCanonStore(CanonStore):
             d = doc.to_dict()
             total += int(d.get("points_delta", 0))
         return total
-
 
     # --- Media assets (generated comics/reels/tiles) ---
     def save_media_asset(self, asset: MediaAsset) -> None:

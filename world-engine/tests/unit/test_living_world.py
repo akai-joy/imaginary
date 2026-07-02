@@ -89,7 +89,9 @@ def test_list_canon_entries_by_type(store):
 
     beasts = store.list_canon_entries_by_type("beast")
     assert {e.id for e in beasts} == {"canon_beast1", "canon_beast2"}
-    assert {e.id for e in store.list_canon_entries_by_type("location")} == {"canon_loc1"}
+    assert {e.id for e in store.list_canon_entries_by_type("location")} == {
+        "canon_loc1"
+    }
     assert store.list_canon_entries_by_type("faction") == []
 
 
@@ -121,8 +123,16 @@ def test_self_healing_migration_on_legacy_db():
             """)
             conn.execute(
                 "INSERT INTO canon_entries VALUES (?,?,?,?,?,?,?,?)",
-                ("canon_old", "lore", "Old", "body", "u1", "[]", 1,
-                 datetime(2026, 1, 1, tzinfo=UTC).isoformat()),
+                (
+                    "canon_old",
+                    "lore",
+                    "Old",
+                    "body",
+                    "u1",
+                    "[]",
+                    1,
+                    datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
+                ),
             )
             conn.commit()
 
@@ -134,10 +144,13 @@ def test_self_healing_migration_on_legacy_db():
         assert legacy.map_meta is None
 
         # New writes with the new fields work on the migrated table
-        store.save_canon_entry(_canon(
-            "canon_new", ContributionType.LOCATION,
-            map_meta=MapMeta(x=1, y=2, region="south"),
-        ))
+        store.save_canon_entry(
+            _canon(
+                "canon_new",
+                ContributionType.LOCATION,
+                map_meta=MapMeta(x=1, y=2, region="south"),
+            )
+        )
         assert store.get_canon_entry("canon_new").map_meta.region == "south"
     finally:
         if os.path.exists(path):

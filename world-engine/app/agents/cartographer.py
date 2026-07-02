@@ -120,9 +120,7 @@ def cartographer_node(ctx: Context, node_input: Contribution):
     # Existing places in THIS world are the only valid placement anchors (anti-hallucination).
     existing_places = [
         e
-        for e in store.list_canon_entries_by_type(
-            PLACE_TYPE.value, contrib.world_id
-        )
+        for e in store.list_canon_entries_by_type(PLACE_TYPE.value, contrib.world_id)
         if e.id != new_entry_id
     ]
     valid_place_ids = {e.id for e in existing_places}
@@ -221,7 +219,9 @@ Existing locations in this world:
             f"at ~({placement.x:.0f}, {placement.y:.0f}); near {near or 'nothing charted yet'}."
         )
     else:
-        located_in = placement.located_in if placement.located_in in valid_place_ids else ""
+        located_in = (
+            placement.located_in if placement.located_in in valid_place_ids else ""
+        )
         if located_in:
             ctx.state["cartographer_proposal"] = {
                 "type": contrib.type.value,
@@ -233,8 +233,6 @@ Existing locations in this world:
         logger.info("Cartographer located %s in %r", new_entry_id, located_in)
 
     yield Event(
-        content=types.Content(
-            role="model", parts=[types.Part.from_text(text=summary)]
-        )
+        content=types.Content(role="model", parts=[types.Part.from_text(text=summary)])
     )
     yield Event(output=contrib)

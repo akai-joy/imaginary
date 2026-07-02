@@ -33,7 +33,15 @@ if os.path.exists(ORIGINAL_POLICY_PATH):
         # Intercept models section and map to gemini-2.5-flash
         if "models" in config:
             for k, v in config["models"].items():
-                if v in ["gemini-flash", "gemini-pro", "gemini-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.5-pro", "gemini-1.5-flash"]:
+                if v in [
+                    "gemini-flash",
+                    "gemini-pro",
+                    "gemini-flash-lite",
+                    "gemini-2.5-flash",
+                    "gemini-3.5-flash",
+                    "gemini-2.5-pro",
+                    "gemini-1.5-flash",
+                ]:
                     config["models"][k] = "gemini-2.5-flash"
 
         resolved_path = ORIGINAL_POLICY_PATH.replace(".yaml", "_resolved.yaml")
@@ -43,6 +51,7 @@ if os.path.exists(ORIGINAL_POLICY_PATH):
         POLICY_PATH = resolved_path
     except Exception as e:
         import sys
+
         print(f"Failed to pre-resolve policy configuration: {e}", file=sys.stderr)
 
 

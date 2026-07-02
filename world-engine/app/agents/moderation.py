@@ -90,11 +90,27 @@ def scan_hidden_content(text: str) -> ModerationResponse | None:
             # Check if it decodes to readable ASCII string
             if all(32 <= ord(c) < 127 for c in decoded_str) and len(decoded_str) > 4:
                 from app.core.security import detect_deterministic_injection
+
                 # Block if it has a space, injection keywords, or security keywords to prevent false positives on random strings
                 if (
                     " " in decoded_str
                     or detect_deterministic_injection(decoded_str)
-                    or any(kw in decoded_str.lower() for kw in ["secret", "code", "admin", "flag", "bypass", "ignore", "system", "override", "instruction", "block", "allow"])
+                    or any(
+                        kw in decoded_str.lower()
+                        for kw in [
+                            "secret",
+                            "code",
+                            "admin",
+                            "flag",
+                            "bypass",
+                            "ignore",
+                            "system",
+                            "override",
+                            "instruction",
+                            "block",
+                            "allow",
+                        ]
+                    )
                 ):
                     return ModerationResponse(
                         verdict=ModerationVerdict.BLOCK,
@@ -113,10 +129,26 @@ def scan_hidden_content(text: str) -> ModerationResponse | None:
             decoded_str = decoded.decode("utf-8", errors="strict")
             if all(32 <= ord(c) < 127 for c in decoded_str) and len(decoded_str) > 4:
                 from app.core.security import detect_deterministic_injection
+
                 if (
                     " " in decoded_str
                     or detect_deterministic_injection(decoded_str)
-                    or any(kw in decoded_str.lower() for kw in ["secret", "code", "admin", "flag", "bypass", "ignore", "system", "override", "instruction", "block", "allow"])
+                    or any(
+                        kw in decoded_str.lower()
+                        for kw in [
+                            "secret",
+                            "code",
+                            "admin",
+                            "flag",
+                            "bypass",
+                            "ignore",
+                            "system",
+                            "override",
+                            "instruction",
+                            "block",
+                            "allow",
+                        ]
+                    )
                 ):
                     return ModerationResponse(
                         verdict=ModerationVerdict.BLOCK,
@@ -156,6 +188,7 @@ def scan_hidden_content(text: str) -> ModerationResponse | None:
 def scan_prompt_injection(text: str) -> ModerationResponse | None:
     """Regex scan for direct or indirect prompt injection patterns."""
     from app.core.security import INJECTION_PATTERNS
+
     for pattern in INJECTION_PATTERNS:
         if re.search(pattern, text):
             stripped = re.sub(pattern, "[removed]", text)
@@ -197,15 +230,18 @@ def moderation_node(ctx: Context, node_input: Contribution):
     # to prevent them from passing into the canon graph.
     clean_text = raw_text.strip()
     is_greeting = clean_text.lower() in {
-        "hi", "hi!", "hello", "hello!", "test", "hey", "greetings", "hi there", "hello there"
+        "hi",
+        "hi!",
+        "hello",
+        "hello!",
+        "test",
+        "hey",
+        "greetings",
+        "hi there",
+        "hello there",
     }
-    
-    if (
-        not clean_text
-        or len(clean_text) < 5
-        or is_greeting
-        or contrib.type == "other"
-    ):
+
+    if not clean_text or len(clean_text) < 5 or is_greeting or contrib.type == "other":
         reason = "Contribution is not a valid storytelling element (e.g. empty, a generic greeting, or unrelated to world-building)."
         logger.warning("Halted on BLOCK (invalid/empty contribution): %s", reason)
         contrib.status = ContributionStatus.BLOCKED

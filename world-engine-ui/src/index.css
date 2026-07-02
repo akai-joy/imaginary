@@ -852,6 +852,9 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 8px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
   animation: fade 0.18s ease;
 }
+.place-card.flip-x { transform: scale(var(--inv, 1)) translate(calc(-100% - 14px), -110%); }
+.place-card.flip-y { transform: scale(var(--inv, 1)) translate(14px, 14px); }
+.place-card.flip-x.flip-y { transform: scale(var(--inv, 1)) translate(calc(-100% - 14px), 14px); }
 .pc-thumb { width: 84px; height: 84px; object-fit: cover; border-radius: 5px; flex: none; border: 1px solid var(--line); }
 .pc-body { min-width: 0; }
 .pc-title { font-family: var(--display); font-size: 16px; font-weight: 600; color: var(--ink); }

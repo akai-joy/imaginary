@@ -65,7 +65,9 @@ showcase_workflow = Workflow(
         Edge(from_node=storyboard_node_node, to_node=director_node_node),
         Edge(from_node=director_node_node, to_node=media_node_node),
         Edge(from_node=media_node_node, to_node=publish_handoff_node_node),
-        Edge(from_node=publish_handoff_node_node, to_node=showcase_controller_node_node),
+        Edge(
+            from_node=publish_handoff_node_node, to_node=showcase_controller_node_node
+        ),
     ],
 )
 

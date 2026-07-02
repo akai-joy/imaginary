@@ -100,10 +100,12 @@ def director_node(ctx: Context, node_input: list[ShowcaseJob]):
             f"Story Title: {storyboard.title}",
             f"Story Logline: {storyboard.logline}",
             "\nFor each scene below, write an optimized prompt focusing on camera moves, lighting, shot size, and visual composition. Keep descriptions clear and direct. Ensure visual elements (like characters and lighting style) are consistent across the scenes.",
-            "\nScenes to optimize:"
+            "\nScenes to optimize:",
         ]
         for scene in storyboard.scenes:
-            prompt_lines.append(f"- Scene {scene.scene_number}: {scene.visual_description}")
+            prompt_lines.append(
+                f"- Scene {scene.scene_number}: {scene.visual_description}"
+            )
 
         prompt = "\n".join(prompt_lines)
 

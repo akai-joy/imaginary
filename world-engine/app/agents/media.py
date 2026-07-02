@@ -132,13 +132,13 @@ def generate_imagen_panel(client: genai.Client, prompt: str, scene_num: int) -> 
                 cache_asset_data(prompt, img_bytes, "png")
                 return img_bytes
         else:
-            logger.info("Calling Gemini Nano Banana (Developer API) for scene %d...", scene_num)
+            logger.info(
+                "Calling Gemini Nano Banana (Developer API) for scene %d...", scene_num
+            )
             response = client.models.generate_content(
                 model="gemini-3.1-flash-image",
                 contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE"]
-                )
+                config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
             )
             if response.candidates and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
@@ -147,7 +147,9 @@ def generate_imagen_panel(client: genai.Client, prompt: str, scene_num: int) -> 
                         cache_asset_data(prompt, img_bytes, "png")
                         return img_bytes
     except Exception as e:
-        logger.warning("Imagen/Nano Banana generation failed: %s. Generating local mock panel.", e)
+        logger.warning(
+            "Imagen/Nano Banana generation failed: %s. Generating local mock panel.", e
+        )
 
     # Fallback to local cacheable mock image
     mock_bytes = create_mock_panel_image(scene_num, prompt)
@@ -168,10 +170,14 @@ def generate_veo_clip(
 
         if is_vertex_enabled():
             model_name = "veo-2.0-generate-001"
-            logger.info("Calling Vertex Veo (%s) for scene %d...", model_tier, scene_num)
+            logger.info(
+                "Calling Vertex Veo (%s) for scene %d...", model_tier, scene_num
+            )
         else:
             model_name = "veo-3.1-generate-preview"
-            logger.info("Calling AI Studio Veo (%s) for scene %d...", model_tier, scene_num)
+            logger.info(
+                "Calling AI Studio Veo (%s) for scene %d...", model_tier, scene_num
+            )
 
         operation = client.models.generate_videos(
             model=model_name,
@@ -184,11 +190,17 @@ def generate_veo_clip(
 
         # Poll the operation until completion
         import time
+
         max_attempts = 12  # Poll for up to 2 minutes
         for i in range(max_attempts):
             if operation.done:
                 break
-            logger.info("Waiting for Veo video clip %d generation (attempt %d/%d)...", scene_num, i+1, max_attempts)
+            logger.info(
+                "Waiting for Veo video clip %d generation (attempt %d/%d)...",
+                scene_num,
+                i + 1,
+                max_attempts,
+            )
             time.sleep(10)
             operation = client.operations.get(operation)
 
@@ -311,9 +323,7 @@ def media_node(ctx: Context, node_input: list[ShowcaseJob]):
                 if getattr(scene, "optimized_prompt", None):
                     prompt = scene.optimized_prompt
                 else:
-                    prompt = (
-                        f"{scene.visual_description}, cinematography, 9:16 vertical video"
-                    )
+                    prompt = f"{scene.visual_description}, cinematography, 9:16 vertical video"
                 clip_bytes = generate_veo_clip(
                     client, prompt, scene.scene_number, model_tier
                 )
