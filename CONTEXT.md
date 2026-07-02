@@ -104,7 +104,7 @@ A **fully Google-native** media stack — every provider is a Gemini/Vertex AI s
 the only secret is Google credentials. All generation goes through provider interfaces
 (swap via `policy.yaml`; keys in Secret Manager — never in code, prompts, or the client):
 - **ImageProvider** — **Vertex AI Imagen** (`imagen-3.0-generate-002`), with **Gemini
-  image** (`gemini-3.1-flash-image`) as the in-code fallback; sizes 1024×1024 /
+  image** (`gemini-3.1-flash-lite-image`) as the in-code fallback; sizes 1024×1024 /
   1536×1024 / 1024×1536; quality low|medium|high; embeds **SynthID** provenance.
 - **VoiceProvider** — **Gemini TTS** (`gemini-2.5-flash-preview-tts`); per-character
   prebuilt voice name from the voice registry; returns audio bytes. Generated once and cached.

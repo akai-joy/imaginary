@@ -68,7 +68,7 @@ Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline 
 
 - **Developer API (AI Studio) Image / Video Integration**:
   - Configured [media.py](file:///Users/akaijoy/aimaginary/world-engine/app/agents/media.py) to dynamically fall back to Gemini Developer API models if Vertex AI is not used (`GOOGLE_GENAI_USE_VERTEXAI == "False"`).
-  - **Image generation** uses `gemini-3.1-flash-image` (Nano Banana) with `GenerateContentConfig(response_modalities=["IMAGE"])`.
+  - **Image generation** uses `gemini-3.1-flash-lite-image` (Nano Banana 2 Lite) with `GenerateContentConfig(response_modalities=["IMAGE"])`.
   - **Video generation** uses `veo-3.1-generate-preview` (AI Studio Veo) with a robust polling loop using `client.operations.get` and `client.files.download` to download the generated `.mp4` binary data correctly.
 - **FastAPI Static File Serving**:
   - Mounted the local `gcs_mock/` directory to `/gcs_mock` in [fast_api_app.py](file:///Users/akaijoy/aimaginary/world-engine/app/fast_api_app.py) using FastAPI `StaticFiles` to allow local asset hosting.

@@ -136,7 +136,7 @@ def generate_imagen_panel(client: genai.Client, prompt: str, scene_num: int) -> 
                 "Calling Gemini Nano Banana (Developer API) for scene %d...", scene_num
             )
             response = client.models.generate_content(
-                model="gemini-3.1-flash-image",
+                model="gemini-3.1-flash-lite-image",
                 contents=prompt,
                 config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
             )
