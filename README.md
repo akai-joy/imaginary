@@ -130,9 +130,10 @@ untrusted — because canon originated from users, it is a **second-order (indir
 vector**. The Narrator even re-moderates its own generated summary before proposing a canon write.
 Red-team cases live under `world-engine/tests/` and the eval suite.
 
-> Note: the custom REST endpoints build their own `Runner`, so the plugin does not automatically
-> cover those paths — the in-graph Moderation gate and the deterministic controller are the
-> guardrails that always run.
+> Coverage: every runner — including those built by the custom REST endpoints — is constructed
+> from the `App` via `app/core/runner_factory.py`, so the plugin's guardrails apply on all paths.
+> The in-graph Moderation gate and the deterministic controller run as additional, always-on layers
+> inside the workflow itself.
 
 ---
 
