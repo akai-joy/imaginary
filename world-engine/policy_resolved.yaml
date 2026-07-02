@@ -69,7 +69,8 @@ chronicle:
       - android
       - ai
       label: The Story-Bot
-      voice: a calm futuristic story-AI streaming the chronicle as an archival broadcast
+      voice: a clear futuristic story-AI speaking in a steady, informative, and clear
+        voice (no whispering), streaming the chronicle as an archival broadcast
       voice_name: Charon
   tts:
     enabled: true

@@ -100,7 +100,7 @@ chronicle:
     storybot:
       label: "The Story-Bot"
       keywords: [futuristic, robot, sci-fi, cyber, space, neon, android, ai]
-      voice: "a calm futuristic story-AI streaming the chronicle as an archival broadcast"
+      voice: "a clear futuristic story-AI speaking in a steady, informative, and clear voice (no whispering), streaming the chronicle as an archival broadcast"
       voice_name: Charon        # calm, informative broadcast
   default_voice_name: Sulafat   # used when a matched persona has no voice_name
 
