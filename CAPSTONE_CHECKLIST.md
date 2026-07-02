@@ -14,7 +14,7 @@ Consider deleting this file before the repo goes public for judging.
 ## Strongly recommended before judging
 
 - [ ] Trim the "Value, economy & rewards" section of WRITEUP.md to ~a third of its length — future-monetization vision dilutes the security story that wins points
-- [ ] Back up `world.db` before any demo rehearsal — `pytest` mutates the real demo canon
+- [x] Back up `world.db` before any demo rehearsal — `pytest` mutates the real demo canon
 - [ ] Fix the `datetime.utcnow()` deprecation warning at `world-engine/app/mcp_server.py:149` (use `datetime.now(UTC)`)
 
 ## Optional polish (only if time allows)
