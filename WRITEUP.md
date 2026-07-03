@@ -3,8 +3,9 @@
 **Capstone — Kaggle 5-Day AI Agents Intensive (Vibe Coding) with Google**
 Stack: ADK 2.0 (graph workflows) · Agents CLI · Google Antigravity · Gemini · Imagen · Veo · Gemini TTS · FastAPI · React + Vite · Google Cloud (Cloud Run / Firestore)
 
+- **Track:** Freestyle
 - **Repository:** https://github.com/akai-joy/imaginary
-- **Demo video:** _<link>_
+- **Demo video:** https://youtu.be/rRw3pJVO2wo
 
 ---
 
@@ -131,8 +132,8 @@ controller, the Proposal→Controller trust boundary is enforced even at the pro
 surface: read everything, corrupt nothing.
 
 We demonstrated this end-to-end: a *different* model — **Claude Desktop, connected to the
-canon over MCP** — read the world and wrote a brand-new, canon-faithful short story ("The
-First Pour"), pulling real characters, the Slag Court, the Ember Accord, the oath-eating
+canon over MCP** — read the world and wrote a brand-new, canon-faithful short story
+([“The First Pour”](the-first-pour.md)), pulling real characters, the Slag Court, the Ember Accord, the oath-eating
 Slagmaw Drake, and even a one-line subplot nobody had developed — while honoring the world's
 dead-magic premise. An outside agent built *on* the world without being able to corrupt it:
 the clearest proof that World Engine is a safe, read-only **platform** other agents can create
