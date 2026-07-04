@@ -38,7 +38,7 @@ flowing to the people whose ideas others reuse. Humans vote on the storylines th
 and the most-loved trees are auto-produced into shareable media. An in-world economy
 rewards good lore, modelled as **points, not currency**.
 
-Two design choices make it a *game*, not a CMS:
+Two design choices make it a *game*, not a content management system (CMS):
 
 - **Seasons.** A world is a limited-time themed **"drop"** that opens on a single
   evocative *opening line*. The time-boxed window concentrates the crowd into a shared
@@ -245,3 +245,11 @@ work, roughly in order:
    guardrails — including a pinned test that runners are only ever built via
    `runner_factory`, so `SecurityPlugin` coverage survives the split — are in
    [`world-engine/REFACTORING_PROPOSAL.md`](world-engine/REFACTORING_PROPOSAL.md).
+
+---
+
+Thank you for your time and consideration for my project, World Engine. I enjoyed
+building this project so much that I spent extra hours building storylines to test the
+agents and contribute to my demo world. World Engine is a perfect demonstration of
+multi-agent and human collaboration for artistic expression without taking away the
+human in the loop.
