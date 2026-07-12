@@ -13,7 +13,6 @@
 import json
 import logging
 import os
-import threading
 import uuid
 from datetime import UTC, datetime
 
@@ -25,6 +24,12 @@ from google.cloud import logging as google_cloud_logging
 from pydantic import BaseModel
 
 from app.agents.showcase_tally import assemble_trees
+from app.api.services.atlas_runner import run_atlas, trigger_atlas_task
+from app.api.services.audio_warmer import (
+    schedule_scene_audio_warmup,
+    set_scene_provider,
+)
+from app.api.services.showcase_runner import run_showcase, trigger_showcase_task
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
 from app.core.store import get_store
@@ -477,138 +482,6 @@ def get_storyline(treeId: str, authorization: str | None = Header(None)):
     }
 
 
-def is_local_dev() -> bool:
-    """True when running locally (no GCP project / Cloud Run), so async work runs inline instead of via Cloud Tasks."""
-    local_dev_env = os.getenv("WORLD_ENGINE_LOCAL_DEV")
-    if local_dev_env is not None:
-        return local_dev_env.upper() == "TRUE"
-    return not os.getenv("GOOGLE_CLOUD_PROJECT") or not os.getenv("K_SERVICE")
-
-
-def enqueue_showcase_task(tree_id: str):
-    """Enqueue the showcase workflow for a tree on Cloud Tasks (the production async path)."""
-    import json
-
-    from google.cloud import tasks_v2
-
-    project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    location = os.getenv("CLOUD_TASKS_LOCATION", "us-central1")
-    queue = os.getenv("CLOUD_TASKS_QUEUE", "showcase-queue")
-
-    service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
-    if not service_url:
-        logger.warning(
-            "SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost."
-        )
-        service_url = "http://localhost:8000"
-
-    target_url = f"{service_url.rstrip('/')}/internal/run-showcase"
-
-    client = tasks_v2.CloudTasksClient()
-    parent = client.queue_path(project, location, queue)
-
-    task = {
-        "http_request": {
-            "http_method": tasks_v2.HttpMethod.POST,
-            "url": target_url,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"tree_id": tree_id}).encode("utf-8"),
-        }
-    }
-
-    service_account_email = os.getenv("CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL")
-    if service_account_email:
-        task["http_request"]["oidc_token"] = {
-            "service_account_email": service_account_email,
-            "audience": target_url,
-        }
-
-    logger.info("Enqueuing Cloud Tasks target=%s for tree_id=%s", target_url, tree_id)
-    client.create_task(request={"parent": parent, "task": task})
-
-
-def enqueue_atlas_task(location_id: str):
-    """Enqueue the async Atlas-illustration workflow for a location on Cloud Tasks (the production async path)."""
-    import json
-
-    from google.cloud import tasks_v2
-
-    project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    location = os.getenv("CLOUD_TASKS_LOCATION", "us-central1")
-    queue = os.getenv("CLOUD_TASKS_QUEUE", "showcase-queue")
-
-    service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
-    if not service_url:
-        logger.warning(
-            "SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost."
-        )
-        service_url = "http://localhost:8000"
-
-    target_url = f"{service_url.rstrip('/')}/internal/paint-atlas"
-
-    client = tasks_v2.CloudTasksClient()
-    parent = client.queue_path(project, location, queue)
-
-    task = {
-        "http_request": {
-            "http_method": tasks_v2.HttpMethod.POST,
-            "url": target_url,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"location_id": location_id}).encode("utf-8"),
-        }
-    }
-
-    service_account_email = os.getenv("CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL")
-    if service_account_email:
-        task["http_request"]["oidc_token"] = {
-            "service_account_email": service_account_email,
-            "audience": target_url,
-        }
-
-    logger.info(
-        "Enqueuing Cloud Tasks target=%s for location_id=%s", target_url, location_id
-    )
-    client.create_task(request={"parent": parent, "task": task})
-
-
-def trigger_atlas_task(location_id: str):
-    """Fire the Atlas illustration for a location: inline in local dev, via Cloud Tasks in the cloud."""
-    if is_local_dev():
-
-        def run_atlas_async():
-            try:
-                from app.agents.atlas_illustrator import atlas_node
-                from app.core.controller import cartography_controller_node
-
-                store = get_store()
-                entry = store.get_canon_entry(location_id)
-                if not entry:
-                    logger.warning(
-                        "run_atlas_async: location %s not found in store.", location_id
-                    )
-                    return
-
-                class SimpleContext:
-                    def __init__(self):
-                        self.state = {}
-
-                ctx = SimpleContext()
-                list(atlas_node(ctx, entry))
-                list(cartography_controller_node(ctx, entry))
-                logger.info(
-                    "Background atlas task completed for location: %s", location_id
-                )
-            except Exception as e:
-                logger.error("Failed to run background atlas task: %s", e)
-
-        threading.Thread(target=run_atlas_async, daemon=True).start()
-    else:
-        try:
-            enqueue_atlas_task(location_id)
-        except Exception as e:
-            logger.error("Failed to enqueue atlas task: %s", e)
-
-
 # Defined AFTER /canon/storylines and /canon/storylines/{treeId} so the parameterized
 # {id} route does not shadow those more specific paths (FastAPI matches in order).
 @app.get("/canon/{id}")
@@ -744,48 +617,7 @@ def post_vote(payload: VotePayload, authorization: str | None = Header(None)):
     if vote_total >= min_votes and composite_score >= min_composite_score:
         existing_jobs = store.list_showcase_jobs()
         if not any(job.tree_id == tree_id for job in existing_jobs):
-            if is_local_dev():
-                # Run showcase workflow asynchronously in background thread
-                def run_showcase_async():
-                    try:
-                        from google.adk.sessions import InMemorySessionService
-                        from google.genai import types
-
-                        from app.core.runner_factory import create_runner
-                        from showcase.agent import app as showcase_app
-
-                        session_service = InMemorySessionService()
-                        session = session_service.create_session_sync(
-                            user_id="system", app_name="showcase"
-                        )
-                        runner = create_runner(showcase_app, session_service)
-
-                        list(
-                            runner.run(
-                                new_message=types.Content(
-                                    role="user",
-                                    parts=[types.Part.from_text(text="run")],
-                                ),
-                                user_id="system",
-                                session_id=session.id,
-                            )
-                        )
-                        logger.info(
-                            "Background showcase workflow executed successfully (local fallback)."
-                        )
-                        warm_scene_audio()
-                    except Exception as e:
-                        logger.error(
-                            "Failed to run background showcase workflow (local fallback): %s",
-                            e,
-                        )
-
-                threading.Thread(target=run_showcase_async, daemon=True).start()
-            else:
-                try:
-                    enqueue_showcase_task(tree_id)
-                except Exception as e:
-                    logger.error("Failed to enqueue showcase task: %s", e)
+            trigger_showcase_task(tree_id)
 
     return {
         "ok": True,
@@ -815,27 +647,7 @@ def post_internal_run_showcase(payload: RunShowcasePayload):
         return {"ok": True, "message": "Already exists"}
 
     try:
-        from google.adk.sessions import InMemorySessionService
-        from google.genai import types
-
-        from app.core.runner_factory import create_runner
-        from showcase.agent import app as showcase_app
-
-        session_service = InMemorySessionService()
-        session = session_service.create_session_sync(
-            user_id="system", app_name="showcase"
-        )
-        runner = create_runner(showcase_app, session_service)
-
-        list(
-            runner.run(
-                new_message=types.Content(
-                    role="user", parts=[types.Part.from_text(text="run")]
-                ),
-                user_id="system",
-                session_id=session.id,
-            )
-        )
+        run_showcase()
         logger.info("Showcase workflow executed successfully via internal endpoint.")
         return {"ok": True}
     except Exception as e:
@@ -963,81 +775,6 @@ def attach_panel_audio(panels: list[dict]) -> list[dict]:
     except Exception as e:
         logger.error("Failed to attach panel audio: %s", e)
     return panels
-
-
-def warm_scene_audio():
-    """Pre-generates TTS for all panel captions across all canon scenes."""
-    try:
-        from app.agents.chronicler import (
-            _chronicle_config,
-            get_cached_speech_url,
-            select_persona,
-            synthesize_speech,
-        )
-
-        config = _chronicle_config()
-        tts_cfg = config.get("tts", {}) or {}
-        if not tts_cfg.get("enabled", True):
-            logger.info("Scene audio warming skipped: tts.enabled is False.")
-            return
-
-        logger.info("Starting background scene audio warmer...")
-        store = get_store()
-
-        active_w = (
-            store.get_world(active_world_id())
-            or store.get_world(DEFAULT_WORLD_ID)
-            or SEED_WORLD
-        )
-        _, persona = select_persona(active_w.theme, config)
-        voice_name = persona.get("voice_name") or config.get(
-            "default_voice_name", "Sulafat"
-        )
-        persona_style = persona.get("voice", "")
-
-        entries = store.list_canon_entries()
-
-        warmed_count = 0
-        cached_count = 0
-        failed_count = 0
-
-        for entry in entries:
-            try:
-                # Call get_scene directly
-                scene_data = get_scene(entry.id)
-                panels = scene_data.get("panels", [])
-                for p in panels:
-                    caption = p.get("caption")
-                    if not caption:
-                        continue
-                    # Check if already cached
-                    cached_url = get_cached_speech_url(caption, voice_name)
-                    if cached_url:
-                        cached_count += 1
-                    else:
-                        # Synthesize
-                        res = synthesize_speech(
-                            caption, voice_name, style=persona_style
-                        )
-                        if res:
-                            warmed_count += 1
-                        else:
-                            failed_count += 1
-            except Exception as ex:
-                logger.error("Warmer failed to process scene %s: %s", entry.id, ex)
-
-        logger.info(
-            "Scene audio warming complete: %d warmed, %d already cached, %d failed",
-            warmed_count,
-            cached_count,
-            failed_count,
-        )
-    except Exception as e:
-        logger.error("Scene audio warmer failed completely: %s", e)
-
-
-# Start the warmer on startup in a daemon background thread
-threading.Thread(target=warm_scene_audio, daemon=True).start()
 
 
 @app.get("/scenes/{scene_id}")
@@ -1397,6 +1134,12 @@ def get_scene(scene_id: str):
     }
 
 
+# The warmer needs the scene builder above; register it, then start the warm-up
+# on the shared background pool (was a raw daemon thread at import time).
+set_scene_provider(get_scene)
+schedule_scene_audio_warmup()
+
+
 @app.get("/showcase")
 def get_showcase():
     """GET /showcase -> MediaAsset[] items with fallback storyboard panels/scenes"""
@@ -1639,16 +1382,7 @@ def post_internal_paint_atlas(payload: PaintAtlasPayload):
         raise HTTPException(status_code=404, detail="Location canon entry not found")
 
     try:
-        from app.agents.atlas_illustrator import atlas_node
-        from app.core.controller import cartography_controller_node
-
-        class SimpleContext:
-            def __init__(self):
-                self.state = {}
-
-        ctx = SimpleContext()
-        list(atlas_node(ctx, entry))
-        list(cartography_controller_node(ctx, entry))
+        run_atlas(payload.location_id)
         return {"ok": True, "location_id": payload.location_id}
     except Exception as e:
         logger.error("Failed to run paint-atlas task in internal handler: %s", e)

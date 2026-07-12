@@ -118,7 +118,7 @@ def tick(store: CanonStore, *, now: datetime | None = None) -> World | None:
             auto_rollover = policy.get("season", {}).get("auto_rollover", False)
             if auto_rollover:
                 try:
-                    from app.fast_api_app import enqueue_showcase_task
+                    from app.api.services.showcase_runner import enqueue_showcase_task
 
                     enqueue_showcase_task()
                 except Exception as e:
