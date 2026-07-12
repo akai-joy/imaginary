@@ -66,3 +66,6 @@ prompts/
 # Backups
 world-engine/backup/
 backup/
+
+# Bound anthologies (generated artifacts, one per world)
+world-engine/books/
