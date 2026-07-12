@@ -45,7 +45,7 @@ def temp_store():
 @pytest.fixture
 def client(temp_store, monkeypatch):
     # Monkeypatch the get_store dependency / helper
-    monkeypatch.setattr("app.fast_api_app.get_store", lambda: temp_store)
+    monkeypatch.setattr("app.api.deps.get_store", lambda: temp_store)
 
     # Monkeypatch the get_user_id_from_token helper to return a deterministic user ID
     # based on the Bearer token content.
@@ -54,7 +54,7 @@ def client(temp_store, monkeypatch):
             return "playground_user"
         return authorization.replace("Bearer ", "")
 
-    monkeypatch.setattr("app.fast_api_app.get_user_id_from_token", mock_get_user_id)
+    monkeypatch.setattr("app.api.deps.get_user_id_from_token", mock_get_user_id)
     return TestClient(app)
 
 

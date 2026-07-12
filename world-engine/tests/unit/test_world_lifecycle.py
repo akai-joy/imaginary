@@ -385,14 +385,14 @@ def test_controller_attributes_ledger_and_canon_to_contribution(store, monkeypat
 
 @pytest.fixture
 def client(store, monkeypatch):
-    monkeypatch.setattr("app.fast_api_app.get_store", lambda: store)
+    monkeypatch.setattr("app.api.deps.get_store", lambda: store)
 
     def mock_get_user_id(authorization: str | None, strict: bool = False) -> str:
         if not authorization or not authorization.startswith("Bearer "):
             return "playground_user"
         return authorization.replace("Bearer ", "")
 
-    monkeypatch.setattr("app.fast_api_app.get_user_id_from_token", mock_get_user_id)
+    monkeypatch.setattr("app.api.deps.get_user_id_from_token", mock_get_user_id)
     return TestClient(app)
 
 

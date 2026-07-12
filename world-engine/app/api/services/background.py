@@ -9,27 +9,34 @@
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
 # limitations under the License.
 """Shared background execution for the REST layer.
 
 All fire-and-forget work (showcase runs, atlas painting, audio warming) goes
-through one small thread pool instead of unbounded ad-hoc threads, and each
-task carries a dedupe key so a flurry of identical triggers (e.g. votes on the
-same tree) launches at most one run.
+through one small pool of daemon workers instead of unbounded ad-hoc threads,
+and each task carries a dedupe key so a flurry of identical triggers (e.g.
+votes on the same tree) launches at most one run.
+
+Daemon workers (not ThreadPoolExecutor) on purpose: executor threads are
+non-daemon and their atexit hook would block interpreter shutdown while a
+long warm-up or showcase run is mid-flight.
 """
 
 import logging
 import os
+import queue
 import threading
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
-_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="we-bg")
+_MAX_WORKERS = 2
+
+_task_queue: queue.Queue = queue.Queue()
 _in_flight: set[str] = set()
 _in_flight_lock = threading.Lock()
+_workers_started = False
+_workers_lock = threading.Lock()
 
 
 def is_local_dev() -> bool:
@@ -38,6 +45,29 @@ def is_local_dev() -> bool:
     if local_dev_env is not None:
         return local_dev_env.upper() == "TRUE"
     return not os.getenv("GOOGLE_CLOUD_PROJECT") or not os.getenv("K_SERVICE")
+
+
+def _worker() -> None:
+    while True:
+        key, fn, args = _task_queue.get()
+        try:
+            fn(*args)
+        except Exception:
+            logger.exception("Background task %r failed", key)
+        finally:
+            with _in_flight_lock:
+                _in_flight.discard(key)
+            _task_queue.task_done()
+
+
+def _ensure_workers() -> None:
+    global _workers_started
+    with _workers_lock:
+        if _workers_started:
+            return
+        for i in range(_MAX_WORKERS):
+            threading.Thread(target=_worker, daemon=True, name=f"we-bg-{i}").start()
+        _workers_started = True
 
 
 def submit_once(key: str, fn: Callable[..., object], *args: object) -> bool:
@@ -51,14 +81,6 @@ def submit_once(key: str, fn: Callable[..., object], *args: object) -> bool:
             return False
         _in_flight.add(key)
 
-    def _run() -> None:
-        try:
-            fn(*args)
-        except Exception:
-            logger.exception("Background task %r failed", key)
-        finally:
-            with _in_flight_lock:
-                _in_flight.discard(key)
-
-    _executor.submit(_run)
+    _ensure_workers()
+    _task_queue.put((key, fn, args))
     return True
