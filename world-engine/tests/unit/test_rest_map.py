@@ -361,8 +361,27 @@ def test_contribute_endpoint_payload(client, monkeypatch):
     response = client.post(
         "/contribute", json=payload, headers={"Authorization": "Bearer tester"}
     )
-    assert response.status_code == 200
-    data = response.json()
+    # Async contract: 202 + job id immediately, verdict via the job endpoint
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+    assert response.json()["status"] == "queued"
+
+    import time
+
+    data = None
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        poll = client.get(
+            f"/contribute/jobs/{job_id}", headers={"Authorization": "Bearer tester"}
+        )
+        assert poll.status_code == 200
+        body = poll.json()
+        if body["status"] == "done":
+            data = body["result"]
+            break
+        time.sleep(0.02)
+
+    assert data is not None, "contribution job never finished"
     assert data["verdict"] == "ALLOW"
     assert data["status"] == "accepted"
 
@@ -371,3 +390,15 @@ def test_contribute_endpoint_payload(client, monkeypatch):
     assert captured_input_data["world_id"] == "world_pirates"
     assert captured_input_data["derived_from"] == ["parent_1"]
     assert captured_input_data["references"] == ["place_1"]
+
+    # Ownership: another user's poll must 404, not leak the job status
+    other = client.get(
+        f"/contribute/jobs/{job_id}", headers={"Authorization": "Bearer someone_else"}
+    )
+    assert other.status_code == 404
+
+    # Unknown job id also 404s
+    missing = client.get(
+        "/contribute/jobs/cjob_nope", headers={"Authorization": "Bearer tester"}
+    )
+    assert missing.status_code == 404

@@ -25,6 +25,7 @@ from app.core.types import (
     SEED_WORLD,
     CanonEntry,
     Contribution,
+    ContributionJob,
     LedgerEntry,
     MapMeta,
     MediaAsset,
@@ -130,6 +131,16 @@ class CanonStore(ABC):
     @abstractmethod
     def get_votes_for_tree(self, tree_id: str) -> list[Vote]:
         """Retrieve all votes for a specific story tree."""
+        pass
+
+    @abstractmethod
+    def save_contribution_job(self, job: ContributionJob) -> None:
+        """Save (create or update) an async contribution job."""
+        pass
+
+    @abstractmethod
+    def get_contribution_job(self, job_id: str) -> ContributionJob | None:
+        """Retrieve an async contribution job by ID."""
         pass
 
     @abstractmethod
@@ -309,6 +320,19 @@ class SQLiteCanonStore(CanonStore):
                     "world_id": "world_id TEXT NOT NULL DEFAULT 'world_genesis'",
                 },
             )
+
+            # Async contribution jobs table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS contribution_jobs (
+                    id TEXT PRIMARY KEY,
+                    world_id TEXT NOT NULL DEFAULT 'world_genesis',
+                    user_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    result_json TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
 
             # Media assets table
             cursor.execute("""
@@ -718,6 +742,51 @@ class SQLiteCanonStore(CanonStore):
                 for row in rows
             ]
 
+    # --- Contribution jobs (async /contribute runs) ---
+    def save_contribution_job(self, job: ContributionJob) -> None:
+        with closing(self._connect()) as conn, conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO contribution_jobs (
+                    id, world_id, user_id, status, result_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    job.id,
+                    job.world_id,
+                    job.user_id,
+                    job.status.value,
+                    job.result_json,
+                    job.created_at.isoformat(),
+                    job.updated_at.isoformat(),
+                ),
+            )
+            conn.commit()
+
+    def get_contribution_job(self, job_id: str) -> ContributionJob | None:
+        with closing(self._connect()) as conn, conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, world_id, user_id, status, result_json, created_at, updated_at
+                FROM contribution_jobs WHERE id = ?
+            """,
+                (job_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return ContributionJob(
+                id=row[0],
+                world_id=row[1],
+                user_id=row[2],
+                status=row[3],
+                result_json=row[4],
+                created_at=datetime.fromisoformat(row[5]),
+                updated_at=datetime.fromisoformat(row[6]),
+            )
+
     # --- Showcase jobs (async media generation) ---
     def save_showcase_job(self, job: ShowcaseJob) -> None:
         with closing(self._connect()) as conn, conn:
@@ -1107,6 +1176,34 @@ class FirestoreCanonStore(CanonStore):
                 )
             )
         return results
+
+    # --- Contribution jobs (async /contribute runs) ---
+    def save_contribution_job(self, job: ContributionJob) -> None:
+        data = {
+            "id": job.id,
+            "world_id": job.world_id,
+            "user_id": job.user_id,
+            "status": job.status.value,
+            "result_json": job.result_json,
+            "created_at": job.created_at.isoformat(),
+            "updated_at": job.updated_at.isoformat(),
+        }
+        self.client.collection("contribution_jobs").document(job.id).set(data)
+
+    def get_contribution_job(self, job_id: str) -> ContributionJob | None:
+        doc = self.client.collection("contribution_jobs").document(job_id).get()
+        if not doc.exists:
+            return None
+        d = doc.to_dict()
+        return ContributionJob(
+            id=d["id"],
+            world_id=d.get("world_id", DEFAULT_WORLD_ID),
+            user_id=d["user_id"],
+            status=d["status"],
+            result_json=d.get("result_json"),
+            created_at=datetime.fromisoformat(d["created_at"]),
+            updated_at=datetime.fromisoformat(d["updated_at"]),
+        )
 
     # --- Showcase jobs (async media generation) ---
     def save_showcase_job(self, job: ShowcaseJob) -> None:

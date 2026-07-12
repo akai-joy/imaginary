@@ -15,6 +15,7 @@
 import os
 
 import google.auth
+from dotenv import load_dotenv
 from google.adk.apps import App
 from google.adk.workflow import Edge, Workflow
 from google.adk.workflow._graph import START
@@ -30,7 +31,12 @@ from app.agents.scoring import scoring_node
 from app.core.controller import ingest_controller_node
 from app.core.security import SecurityPlugin
 
-# Authenticate with Google Cloud
+# Authenticate with Google Cloud.
+# Load .env first: app/__init__.py imports this module, so this bootstrap runs
+# before fast_api_app's own load_dotenv — without this, the .env Vertex settings
+# were only honored when ADC happened to supply a project id.
+load_dotenv()
+
 if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:
     use_vertex = os.environ["GOOGLE_GENAI_USE_VERTEXAI"] == "True"
 else:

@@ -158,6 +158,27 @@ class ShowcaseJobStatus(StrEnum):
     PUBLISHED_MOCK = "published_mock"
 
 
+class ContributionJobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    DONE = "done"
+
+
+class ContributionJob(BaseModel):
+    """Tracks one async /contribute run. The submission payload itself travels
+    with the dispatch (in-process closure locally, Cloud Tasks body in the
+    cloud) so the caller's id_token never rests in the database; only the
+    status and final verdict are persisted here."""
+
+    id: str
+    world_id: str = DEFAULT_WORLD_ID
+    user_id: str
+    status: ContributionJobStatus = ContributionJobStatus.QUEUED
+    result_json: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 class Vote(BaseModel):
     id: str
     voter_id: str

@@ -173,7 +173,10 @@ export function useApi() {
 
       // POST /contribute { title, type, body, derived_from?, references? }
       //   derived_from = lineage you're *continuing* (the fold); references = canon
-      //   you're *connecting to*. -> { status, verdict, score, message }
+      //   you're *connecting to*.
+      // The pipeline is async: the server answers 202 { job_id } and we poll
+      // GET /contribute/jobs/:id until the verdict { status, verdict, score,
+      // message } is ready. Sealed worlds still answer with the verdict inline.
       async submitContribution(payload) {
         if (apiMock) {
           return {
@@ -183,7 +186,21 @@ export function useApi() {
             message: '(demo) Cleared moderation and merged into canon.',
           }
         }
-        return request('/contribute', { method: 'POST', body: payload, token: await getToken() })
+        const submitted = await request('/contribute', {
+          method: 'POST',
+          body: payload,
+          token: await getToken(),
+        })
+        if (!submitted?.job_id) return submitted
+        const deadline = Date.now() + 3 * 60 * 1000
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+          const job = await request(`/contribute/jobs/${submitted.job_id}`, {
+            token: await getToken(),
+          })
+          if (job?.status === 'done') return job.result
+        }
+        throw new Error('Contribution timed out — the world may be busy; try again.')
       },
     }),
     [getToken],

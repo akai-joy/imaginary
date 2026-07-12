@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from app.api import deps
 from app.api.services.atlas_runner import run_atlas
+from app.api.services.contribution_runner import run_contribution_job
 from app.api.services.showcase_runner import run_showcase
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,22 @@ def post_internal_run_showcase(payload: RunShowcasePayload):
         return {"ok": True}
     except Exception as e:
         logger.error("Failed to run showcase workflow in internal handler: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+class RunContributionPayload(BaseModel):
+    job_id: str
+    pipeline_kwargs: dict
+
+
+@router.post("/internal/run-contribution")
+def post_internal_run_contribution(payload: RunContributionPayload):
+    """POST /internal/run-contribution -> execute an async contribution pipeline (internal Cloud Tasks callback)."""
+    try:
+        run_contribution_job(payload.job_id, payload.pipeline_kwargs)
+        return {"ok": True, "job_id": payload.job_id}
+    except Exception as e:
+        logger.error("Failed to run contribution job in internal handler: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
