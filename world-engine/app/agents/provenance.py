@@ -81,8 +81,12 @@ def provenance_node(ctx: Context, node_input: Contribution):
     # 1. Retrieve related canon entries
     store = get_store()
 
-    # Search using title and body keywords
-    retrieved_canon = store.search_canon_entries(f"{contrib.title} {contrib.body}")
+    # Vector search over the contribution's world (keyword fallback inside)
+    from app.core.retrieval import semantic_search
+
+    retrieved_canon = semantic_search(
+        store, f"{contrib.title} {contrib.body}", world_id=contrib.world_id
+    )
 
     # 2. Skip LLM call if the store is empty
     if not retrieved_canon:

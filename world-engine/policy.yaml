@@ -161,6 +161,15 @@ media_providers:
     max_video_panels_per_scene: 2
 
 # ---------------------------------------------------------------------------
+# Semantic canon retrieval (Continuity / Provenance context)
+# ---------------------------------------------------------------------------
+retrieval:
+  enabled: true                          # WORLD_ENGINE_EMBEDDINGS=off overrides (tests)
+  embedding_model: gemini-embedding-001
+  embedding_dimensions: 768
+  top_k: 8                               # canon neighbours handed to the Continuity LLM
+
+# ---------------------------------------------------------------------------
 # Season / drop lifecycle (the time-boxed contribution window)
 # ---------------------------------------------------------------------------
 season:

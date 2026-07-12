@@ -158,6 +158,18 @@ class ShowcaseJobStatus(StrEnum):
     PUBLISHED_MOCK = "published_mock"
 
 
+class CanonEmbedding(BaseModel):
+    """Vector-index row for one canon entry (semantic continuity retrieval).
+    content_hash lets re-indexing skip entries whose text hasn't changed."""
+
+    canon_id: str
+    world_id: str = DEFAULT_WORLD_ID
+    model: str
+    content_hash: str
+    vector: list[float]
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class ContributionJobStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"

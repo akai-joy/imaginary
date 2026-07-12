@@ -135,6 +135,15 @@ def ingest_controller_node(ctx: Context, node_input: Contribution):
             store.save_canon_entry(new_entry)
             logger.info("Controller saved CanonEntry: %s", new_entry.id)
 
+            # Keep the semantic index in step with canon; retrieval degrades to
+            # keyword search if this ever fails, so indexing is best-effort.
+            try:
+                from app.core.retrieval import index_canon_entry
+
+                index_canon_entry(store, new_entry)
+            except Exception as e:
+                logger.warning("Embedding index skipped for %s: %s", new_entry.id, e)
+
     # Always save the final Contribution status
     store.save_contribution(contrib)
     logger.info("Controller saved Contribution status: %s", contrib.status)

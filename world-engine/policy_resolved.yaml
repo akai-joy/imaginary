@@ -157,6 +157,11 @@ rate_limits:
   contributions_per_user_per_hour: 20
   max_contribution_chars: 4000
   votes_per_user_per_tree: 1
+retrieval:
+  embedding_dimensions: 768
+  embedding_model: gemini-embedding-001
+  enabled: true
+  top_k: 8
 scoring:
   points_multiplier: 1
   range:

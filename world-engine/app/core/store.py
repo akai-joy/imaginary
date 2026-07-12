@@ -15,6 +15,7 @@
 import json
 import re
 import sqlite3
+import struct
 from abc import ABC, abstractmethod
 from contextlib import closing
 from datetime import UTC, datetime
@@ -23,6 +24,7 @@ from functools import lru_cache
 from app.core.types import (
     DEFAULT_WORLD_ID,
     SEED_WORLD,
+    CanonEmbedding,
     CanonEntry,
     Contribution,
     ContributionJob,
@@ -131,6 +133,21 @@ class CanonStore(ABC):
     @abstractmethod
     def get_votes_for_tree(self, tree_id: str) -> list[Vote]:
         """Retrieve all votes for a specific story tree."""
+        pass
+
+    @abstractmethod
+    def save_canon_embedding(self, embedding: CanonEmbedding) -> None:
+        """Upsert the vector-index row for a canon entry."""
+        pass
+
+    @abstractmethod
+    def get_canon_embedding(self, canon_id: str) -> CanonEmbedding | None:
+        """Retrieve the vector-index row for one canon entry."""
+        pass
+
+    @abstractmethod
+    def list_canon_embeddings(self, world_id: str | None = None) -> list[CanonEmbedding]:
+        """List vector-index rows, optionally scoped to one world."""
         pass
 
     @abstractmethod
@@ -320,6 +337,18 @@ class SQLiteCanonStore(CanonStore):
                     "world_id": "world_id TEXT NOT NULL DEFAULT 'world_genesis'",
                 },
             )
+
+            # Canon embeddings table (semantic continuity retrieval)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS canon_embeddings (
+                    canon_id TEXT PRIMARY KEY,
+                    world_id TEXT NOT NULL DEFAULT 'world_genesis',
+                    model TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    vector BLOB NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
 
             # Async contribution jobs table
             cursor.execute("""
@@ -737,6 +766,81 @@ class SQLiteCanonStore(CanonStore):
                     world_id=row[2],
                     tree_id=row[3],
                     weight=row[4],
+                    created_at=datetime.fromisoformat(row[5]),
+                )
+                for row in rows
+            ]
+
+    # --- Canon embeddings (semantic continuity retrieval) ---
+    @staticmethod
+    def _pack_vector(vector: list[float]) -> bytes:
+        return struct.pack(f"{len(vector)}f", *vector)
+
+    @staticmethod
+    def _unpack_vector(blob: bytes) -> list[float]:
+        return list(struct.unpack(f"{len(blob) // 4}f", blob))
+
+    def save_canon_embedding(self, embedding: CanonEmbedding) -> None:
+        with closing(self._connect()) as conn, conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO canon_embeddings (
+                    canon_id, world_id, model, content_hash, vector, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    embedding.canon_id,
+                    embedding.world_id,
+                    embedding.model,
+                    embedding.content_hash,
+                    self._pack_vector(embedding.vector),
+                    embedding.created_at.isoformat(),
+                ),
+            )
+            conn.commit()
+
+    def get_canon_embedding(self, canon_id: str) -> CanonEmbedding | None:
+        with closing(self._connect()) as conn, conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT canon_id, world_id, model, content_hash, vector, created_at
+                FROM canon_embeddings WHERE canon_id = ?
+            """,
+                (canon_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return CanonEmbedding(
+                canon_id=row[0],
+                world_id=row[1],
+                model=row[2],
+                content_hash=row[3],
+                vector=self._unpack_vector(row[4]),
+                created_at=datetime.fromisoformat(row[5]),
+            )
+
+    def list_canon_embeddings(self, world_id: str | None = None) -> list[CanonEmbedding]:
+        with closing(self._connect()) as conn, conn:
+            cursor = conn.cursor()
+            base = (
+                "SELECT canon_id, world_id, model, content_hash, vector, created_at "
+                "FROM canon_embeddings"
+            )
+            if world_id is None:
+                cursor.execute(base)
+            else:
+                cursor.execute(base + " WHERE world_id = ?", (world_id,))
+            rows = cursor.fetchall()
+            return [
+                CanonEmbedding(
+                    canon_id=row[0],
+                    world_id=row[1],
+                    model=row[2],
+                    content_hash=row[3],
+                    vector=self._unpack_vector(row[4]),
                     created_at=datetime.fromisoformat(row[5]),
                 )
                 for row in rows
@@ -1172,6 +1276,50 @@ class FirestoreCanonStore(CanonStore):
                     world_id=d.get("world_id", DEFAULT_WORLD_ID),
                     tree_id=d["tree_id"],
                     weight=d["weight"],
+                    created_at=datetime.fromisoformat(d["created_at"]),
+                )
+            )
+        return results
+
+    # --- Canon embeddings (semantic continuity retrieval) ---
+    def save_canon_embedding(self, embedding: CanonEmbedding) -> None:
+        data = {
+            "canon_id": embedding.canon_id,
+            "world_id": embedding.world_id,
+            "model": embedding.model,
+            "content_hash": embedding.content_hash,
+            "vector": list(embedding.vector),
+            "created_at": embedding.created_at.isoformat(),
+        }
+        self.client.collection("canon_embeddings").document(embedding.canon_id).set(data)
+
+    def get_canon_embedding(self, canon_id: str) -> CanonEmbedding | None:
+        doc = self.client.collection("canon_embeddings").document(canon_id).get()
+        if not doc.exists:
+            return None
+        d = doc.to_dict()
+        return CanonEmbedding(
+            canon_id=d["canon_id"],
+            world_id=d.get("world_id", DEFAULT_WORLD_ID),
+            model=d["model"],
+            content_hash=d["content_hash"],
+            vector=list(d.get("vector", [])),
+            created_at=datetime.fromisoformat(d["created_at"]),
+        )
+
+    def list_canon_embeddings(self, world_id: str | None = None) -> list[CanonEmbedding]:
+        col = self.client.collection("canon_embeddings")
+        query = col.where("world_id", "==", world_id) if world_id is not None else col
+        results = []
+        for doc in query.stream():
+            d = doc.to_dict()
+            results.append(
+                CanonEmbedding(
+                    canon_id=d["canon_id"],
+                    world_id=d.get("world_id", DEFAULT_WORLD_ID),
+                    model=d["model"],
+                    content_hash=d["content_hash"],
+                    vector=list(d.get("vector", [])),
                     created_at=datetime.fromisoformat(d["created_at"]),
                 )
             )
