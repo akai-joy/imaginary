@@ -80,13 +80,25 @@ def scan_hidden_content(text: str) -> ModerationResponse | None:
             reason=f"Detected and stripped zero-width/invisible unicode characters. Stripped text: '{stripped}'",
         )
 
-    # 2. Base64 encoding scan (minimum 8 characters, optional padding)
-    b64_regex = re.compile(r"\b[A-Za-z0-9+/]{8,}={0,2}\b")
+    # 2. Base64 encoding scan (standard + urlsafe alphabets). No trailing \b —
+    # '=' padding has no word boundary against a following space, which made the
+    # old pattern backtrack past the padding and every decode fail the length
+    # check (the scan never fired). Padding is re-normalized before decoding so
+    # unpadded payloads are caught too.
+    b64_regex = re.compile(r"[A-Za-z0-9+/_-]{8,}={0,2}")
     for match in b64_regex.finditer(text):
-        potential_b64 = match.group(0)
-        try:
-            decoded = base64.b64decode(potential_b64, validate=True)
-            decoded_str = decoded.decode("utf-8", errors="strict")
+        candidate = match.group(0).rstrip("=")
+        padded = candidate + "=" * (-len(candidate) % 4)
+        decoded_str = None
+        for decoder in (base64.b64decode, base64.urlsafe_b64decode):
+            try:
+                decoded_str = decoder(padded, validate=True).decode(
+                    "utf-8", errors="strict"
+                )
+                break
+            except Exception:
+                continue
+        if decoded_str is not None:
             # Check if it decodes to readable ASCII string
             if all(32 <= ord(c) < 127 for c in decoded_str) and len(decoded_str) > 4:
                 from app.core.security import detect_deterministic_injection
@@ -117,8 +129,6 @@ def scan_hidden_content(text: str) -> ModerationResponse | None:
                         category="hidden_content",
                         reason=f"Detected and blocked base64 encoded message containing injection: '{decoded_str}'",
                     )
-        except Exception:
-            pass
 
     # 3. Hex encoding scan
     hex_regex = re.compile(r"\b[0-9a-fA-F]{8,}\b")

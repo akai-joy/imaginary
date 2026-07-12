@@ -402,3 +402,38 @@ def test_contribute_endpoint_payload(client, monkeypatch):
         "/contribute/jobs/cjob_nope", headers={"Authorization": "Bearer tester"}
     )
     assert missing.status_code == 404
+
+
+def test_storylines_scoped_to_active_world(client, temp_store):
+    """A second world's trees must not leak into the active world's storyline list,
+    but stay reachable by direct link (archived collectibles)."""
+    from app.core.types import CanonEntry
+
+    temp_store.save_canon_entry(
+        CanonEntry(
+            id="canon_home",
+            world_id="world_genesis",
+            type="lore",
+            title="Home Tree",
+            body="Belongs to the active world.",
+            contributor_id="user_a",
+        )
+    )
+    temp_store.save_canon_entry(
+        CanonEntry(
+            id="canon_far",
+            world_id="world_pirates",
+            type="lore",
+            title="Far Tree",
+            body="Belongs to another world.",
+            contributor_id="user_b",
+        )
+    )
+
+    listed = client.get("/canon/storylines").json()
+    assert {t["tree_id"] for t in listed} == {"canon_home"}
+
+    # Direct link to the other world's tree still resolves (scoped to its world)
+    detail = client.get("/canon/storylines/canon_far")
+    assert detail.status_code == 200
+    assert detail.json()["tree_id"] == "canon_far"

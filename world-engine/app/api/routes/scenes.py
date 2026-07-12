@@ -103,7 +103,7 @@ def get_scene(scene_id: str):
     ):
         # Custom override for the Alistair / Elynar storyline matching the custom video assets
         choices = []
-        canon_entries = store.list_canon_entries()
+        canon_entries = store.list_canon_entries(entry.world_id)
         children = [e for e in canon_entries if scene_id in e.derived_from]
         for child in children:
             choices.append({"label": child.title, "to": child.id})
@@ -318,8 +318,9 @@ def get_scene(scene_id: str):
 
     from app.core.types import Storyboard
 
-    # Reconstruct the tree containing this scene to find the ShowcaseJob and storyboard
-    canon_entries = store.list_canon_entries()
+    # Reconstruct the tree containing this scene (within the entry's own world)
+    # to find the ShowcaseJob and storyboard
+    canon_entries = store.list_canon_entries(entry.world_id)
     assembled = assemble_trees(canon_entries)
 
     # Find the tree containing this entry

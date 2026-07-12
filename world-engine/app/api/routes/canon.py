@@ -32,9 +32,9 @@ router = APIRouter()
 
 @router.get("/canon/storylines")
 def list_storylines(authorization: str | None = Header(None)):
-    """GET /canon/storylines -> StorylineTree[] summaries"""
+    """GET /canon/storylines -> StorylineTree[] summaries (active world only)"""
     store = deps.get_store()
-    canon_entries = store.list_canon_entries()
+    canon_entries = store.list_canon_entries(deps.active_world_id())
     assembled = assemble_trees(canon_entries)
     user_id = deps.get_user_id_from_token(authorization)
 
@@ -96,9 +96,16 @@ def list_storylines(authorization: str | None = Header(None)):
 
 @router.get("/canon/storylines/{treeId}")
 def get_storyline(treeId: str, authorization: str | None = Header(None)):
-    """GET /canon/storylines/:treeId -> Detailed StorylineTree with nodes array"""
+    """GET /canon/storylines/:treeId -> Detailed StorylineTree with nodes array.
+
+    Scoped to the tree root's own world (not the active one) so storylines in
+    archived collectible worlds stay reachable by direct link."""
     store = deps.get_store()
-    canon_entries = store.list_canon_entries()
+    root_entry = store.get_canon_entry(treeId)
+    if not root_entry:
+        raise HTTPException(status_code=404, detail="Root entry not found")
+
+    canon_entries = store.list_canon_entries(root_entry.world_id)
     assembled = assemble_trees(canon_entries)
     user_id = deps.get_user_id_from_token(authorization)
 
@@ -110,10 +117,6 @@ def get_storyline(treeId: str, authorization: str | None = Header(None)):
 
     if not target_members:
         raise HTTPException(status_code=404, detail="Storyline tree not found")
-
-    root_entry = store.get_canon_entry(treeId)
-    if not root_entry:
-        raise HTTPException(status_code=404, detail="Root entry not found")
 
     votes = store.get_votes_for_tree(treeId)
     vote_total = sum(v.weight for v in votes)
@@ -300,8 +303,11 @@ def post_vote(payload: VotePayload, authorization: str | None = Header(None)):
         except Exception:
             pass
 
-    # 2. Calculate composite score
-    canon_entries = store.list_canon_entries()
+    # 2. Calculate composite score (tree assembly scoped to the tree's world)
+    root_entry = store.get_canon_entry(tree_id)
+    canon_entries = store.list_canon_entries(
+        root_entry.world_id if root_entry else None
+    )
     assembled = assemble_trees(canon_entries)
     target_members = []
     for root_id, member_ids in assembled:
