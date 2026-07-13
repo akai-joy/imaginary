@@ -129,6 +129,30 @@ def get_world_chronicle(authorization: str | None = Header(None)):
     return build_chronicle(deps.resolve_active_world(), store)
 
 
+@router.get("/world/{world_id}/book")
+def get_world_book(world_id: str):
+    """GET /world/{world_id}/book -> the single-file HTML season anthology.
+
+    Archived worlds are immutable, so their bound book is compiled once and
+    cached; an active world recompiles per request (Working Draft edition)."""
+    from fastapi.responses import HTMLResponse
+
+    from app.api.services.finale import bind_book, book_path
+    from app.core.types import WorldStatus
+
+    store = deps.get_store()
+    world = store.get_world(world_id)
+    if not world:
+        raise HTTPException(status_code=404, detail=f"World {world_id} not found")
+
+    draft = world.status != WorldStatus.ARCHIVED
+    path = book_path(world_id, draft=draft)
+    if draft or not path.exists():
+        path = bind_book(world_id, store, draft=draft)
+
+    return HTMLResponse(content=path.read_text(encoding="utf-8"))
+
+
 @router.get("/codex/{kind}")
 def get_codex(kind: str, authorization: str | None = Header(None)):
     """GET /codex/{kind} -> the codex index grid for one entry type (characters|beasts|spells), tagged with per-user discovery flags."""

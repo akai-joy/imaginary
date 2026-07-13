@@ -112,17 +112,10 @@ def tick(store: CanonStore, *, now: datetime | None = None) -> World | None:
             )
             close_world(store, world.id, now=now)
             world = store.get_world(world.id)
-
-            # Stretch Goal Check: Trigger showcase tasks on finale/auto-close
-            policy = load_policy_config()
-            auto_rollover = policy.get("season", {}).get("auto_rollover", False)
-            if auto_rollover:
-                try:
-                    from app.api.services.showcase_runner import enqueue_showcase_task
-
-                    enqueue_showcase_task()
-                except Exception as e:
-                    logger.error("Failed to fire finale showcase: %s", e)
+            # Finale artifacts need no hook here: the anthology is bound on
+            # demand by GET /world/{id}/book (and pre-warmed by the close/open
+            # admin endpoints). Opening the next drop stays a deliberate act
+            # via POST /internal/world/open — auto-close only seals.
 
     if world and world.status == WorldStatus.ACTIVE:
         return world

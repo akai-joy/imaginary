@@ -748,6 +748,22 @@ button { font-family: inherit; cursor: pointer; }
 .wb-clock .t { display: block; font-size: 19px; color: var(--gold); letter-spacing: 0.04em; }
 .wb-clock .l { display: block; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); margin-top: 2px; }
 
+/* Sealed drop: clock + bound-anthology link side by side */
+.wb-sealed-group { margin-left: auto; display: flex; align-items: stretch; gap: 10px; }
+.wb-sealed-group .wb-clock { margin-left: 0; }
+.wb-book {
+  display: flex; flex-direction: column; justify-content: center; text-align: center;
+  font-family: var(--mono); font-size: 13px; letter-spacing: 0.06em;
+  color: var(--gold); text-decoration: none; padding: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.wb-book:hover {
+  background: color-mix(in srgb, var(--gold) 22%, transparent);
+  border-color: var(--gold);
+}
+
 /* ---------- The Atlas (fog-of-war map) ---------- */
 /* Break out of the .main max-width to span the viewport (no overflow). The map
    stage is square and height-driven, so real size comes from height (.atlas); the
@@ -1110,6 +1126,7 @@ button { font-family: inherit; cursor: pointer; }
 @media (max-width: 760px) {
   .world-banner { padding: 16px 18px 0; }
   .wb-clock { margin-left: 0; }
+  .wb-sealed-group { margin-left: 0; }
   .atlas-wrap { padding: 8px 12px 50px; }
   .place-name { font-size: 11px; }
 }

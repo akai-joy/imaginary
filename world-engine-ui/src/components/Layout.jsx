@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
-import { apiMock, useApi } from '../api'
+import { apiMock, assetUrl, useApi } from '../api'
 import WorldEntry from './WorldEntry'
 
 function countdown(closesAt) {
@@ -76,9 +76,22 @@ export default function Layout() {
             {world.opening_line && <p className="wb-line">“{world.opening_line}”</p>}
           </div>
           {isClosed ? (
-            <div className="wb-clock sealed" title="This world has closed and is now a read-only archived collectible">
-              <span className="t">✦ Sealed</span>
-              <span className="l">archived collectible</span>
+            <div className="wb-sealed-group">
+              <div className="wb-clock sealed" title="This world has closed and is now a read-only archived collectible">
+                <span className="t">✦ Sealed</span>
+                <span className="l">archived collectible</span>
+              </div>
+              {!apiMock && world.world_id && (
+                <a
+                  className="wb-book"
+                  href={assetUrl(`/world/${world.world_id}/book`)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="The bound season anthology — every storyline the crowd wrote, as a single book"
+                >
+                  📖 Read the book
+                </a>
+              )}
             </div>
           ) : (
             left && (

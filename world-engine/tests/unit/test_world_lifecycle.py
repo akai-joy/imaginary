@@ -556,3 +556,99 @@ def test_get_world_reports_window_open_and_remaining(client, store):
     assert data["window_open"] is True
     assert data["time_remaining_seconds"] is not None
     assert data["time_remaining_seconds"] > 0
+
+
+# --- close-the-world / reopen mechanism (seal, bind the book, roll over) ---
+
+
+def test_internal_world_close_seals_and_schedules_book(client, store, monkeypatch):
+    bound = []
+    monkeypatch.setattr(
+        "app.api.routes.internal.schedule_book_binding", lambda wid: bound.append(wid)
+    )
+
+    # No world_id -> seals the active (seeded) world
+    r = client.post("/internal/world/close", json={})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["world_id"] == "world_genesis"
+    assert data["status"] == "archived"
+    assert data["already_archived"] is False
+    assert data["book_url"] == "/world/world_genesis/book"
+    assert bound == ["world_genesis"]
+
+    # The REST surface reflects the seal
+    w = client.get("/world").json()
+    assert w["window_open"] is False
+    assert w["status"] == "archived"
+
+    # Closing again is idempotent, not an error
+    r2 = client.post("/internal/world/close", json={"world_id": "world_genesis"})
+    assert r2.status_code == 200
+    assert r2.json()["already_archived"] is True
+
+    # No active world left -> default close targets nothing
+    assert client.post("/internal/world/close", json={}).status_code == 404
+    # Unknown world 404s
+    assert (
+        client.post("/internal/world/close", json={"world_id": "w_nope"}).status_code
+        == 404
+    )
+
+
+def test_internal_world_open_rolls_over_to_new_drop(client, store, monkeypatch):
+    bound = []
+    monkeypatch.setattr(
+        "app.api.routes.internal.schedule_book_binding", lambda wid: bound.append(wid)
+    )
+
+    payload = {
+        "theme": "Solarpunk Seafarers",
+        "opening_line": "The tide returned the city's mail, unopened.",
+        "drop_days": 7,
+    }
+    r = client.post("/internal/world/open", json=payload)
+    assert r.status_code == 200
+    d = r.json()
+    # The previous drop is archived and its anthology pre-bound
+    assert d["archived"]["world_id"] == "world_genesis"
+    assert d["archived"]["status"] == "archived"
+    assert d["archived"]["book_url"] == "/world/world_genesis/book"
+    assert bound == ["world_genesis"]
+    # The new drop is active, id slugged from the theme, window = 7 days
+    assert d["opened"]["world_id"] == "world_solarpunk_seafarers"
+    assert d["opened"]["status"] == "active"
+
+    w = client.get("/world").json()
+    assert w["world_id"] == "world_solarpunk_seafarers"
+    assert w["theme"] == "Solarpunk Seafarers"
+    assert w["window_open"] is True
+    assert 0 < w["time_remaining_seconds"] <= 7 * 86400
+
+    # Same id again -> conflict, and no second rollover happened
+    assert client.post("/internal/world/open", json=payload).status_code == 409
+    assert client.get("/world").json()["world_id"] == "world_solarpunk_seafarers"
+
+
+def test_world_book_endpoint_compiles_and_caches(client, store, monkeypatch, tmp_path):
+    monkeypatch.setenv("WORLD_ENGINE_BOOKS_DIR", str(tmp_path))
+
+    # Active world -> Working Draft edition, recompiled per request
+    r = client.get("/world/world_genesis/book")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    assert "Working Draft" in r.text
+    assert "Medieval Wizards" in r.text
+
+    # Sealed world -> Season Finale Edition, compiled once then cached
+    lifecycle.close_world(store, "world_genesis")
+    r2 = client.get("/world/world_genesis/book")
+    assert "Season Finale Edition" in r2.text
+    cached = tmp_path / "world_genesis_anthology.html"
+    assert cached.exists()
+
+    cached.write_text(r2.text.replace("Season Finale Edition", "CACHED_SENTINEL"))
+    r3 = client.get("/world/world_genesis/book")
+    assert "CACHED_SENTINEL" in r3.text  # archived book served from cache
+
+    assert client.get("/world/w_nope/book").status_code == 404

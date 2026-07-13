@@ -13,6 +13,8 @@
 """Internal hooks: Cloud Tasks callbacks and admin/cron endpoints."""
 
 import logging
+import re
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Header, HTTPException
@@ -21,6 +23,7 @@ from pydantic import BaseModel
 from app.api import deps
 from app.api.services.atlas_runner import run_atlas
 from app.api.services.contribution_runner import run_contribution_job
+from app.api.services.finale import schedule_book_binding
 from app.api.services.showcase_runner import run_showcase
 
 logger = logging.getLogger(__name__)
@@ -110,6 +113,115 @@ def post_internal_world_schedule(
         "opens_at": w.opens_at.isoformat() if w.opens_at else None,
         "closes_at": w.closes_at.isoformat() if w.closes_at else None,
         "status": w.status.value if hasattr(w.status, "value") else w.status,
+    }
+
+
+def _world_summary(w) -> dict:
+    return {
+        "world_id": w.id,
+        "theme": w.theme,
+        "opening_line": w.opening_line,
+        "status": w.status.value if hasattr(w.status, "value") else w.status,
+        "opens_at": w.opens_at.isoformat() if w.opens_at else None,
+        "closes_at": w.closes_at.isoformat() if w.closes_at else None,
+    }
+
+
+class CloseWorldPayload(BaseModel):
+    world_id: str | None = None  # default: the active world
+
+
+@router.post("/internal/world/close")
+def post_internal_world_close(
+    payload: CloseWorldPayload, authorization: str | None = Header(None)
+):
+    """POST /internal/world/close -> seal a drop now (admin hook).
+
+    Archives the world (idempotent) and pre-binds its season anthology in the
+    background; the book is also compiled on demand by GET /world/{id}/book."""
+    _user_id = deps.get_user_id_from_token(authorization)
+    store = deps.get_store()
+
+    from app.core.lifecycle import close_world
+
+    target_id = payload.world_id
+    if not target_id:
+        active = store.get_active_world()
+        if not active:
+            raise HTTPException(status_code=404, detail="No active world to close")
+        target_id = active.id
+
+    if not store.get_world(target_id):
+        raise HTTPException(status_code=404, detail=f"World {target_id} not found")
+
+    archived = close_world(store, target_id)
+    world = store.get_world(target_id)
+    schedule_book_binding(target_id)
+
+    return {
+        **_world_summary(world),
+        "already_archived": archived is None,
+        "book_url": f"/world/{target_id}/book",
+    }
+
+
+class OpenWorldPayload(BaseModel):
+    theme: str
+    opening_line: str
+    art_style_directive: str = ""
+    moderation_profile: str = "default"
+    world_id: str | None = None  # default: slug derived from the theme
+    drop_days: int | None = None  # default: policy season.drop_days
+
+
+@router.post("/internal/world/open")
+def post_internal_world_open(
+    payload: OpenWorldPayload, authorization: str | None = Header(None)
+):
+    """POST /internal/world/open -> roll over to a new themed drop (admin hook).
+
+    Archives the current active world (if any, pre-binding its anthology) and
+    opens the new one. There is only ever one active drop."""
+    _user_id = deps.get_user_id_from_token(authorization)
+    store = deps.get_store()
+
+    from datetime import timedelta
+
+    from app.core.lifecycle import rollover_world
+    from app.core.types import World
+
+    new_id = payload.world_id
+    if not new_id:
+        slug = re.sub(r"[^a-z0-9]+", "_", payload.theme.lower()).strip("_")
+        new_id = f"world_{slug or uuid.uuid4().hex[:8]}"
+    if store.get_world(new_id):
+        raise HTTPException(status_code=409, detail=f"World {new_id} already exists")
+
+    now = datetime.now(UTC)
+    next_world = World(
+        id=new_id,
+        theme=payload.theme,
+        opening_line=payload.opening_line,
+        art_style_directive=payload.art_style_directive,
+        moderation_profile=payload.moderation_profile,
+        opens_at=now,
+        closes_at=now + timedelta(days=payload.drop_days)
+        if payload.drop_days
+        else None,  # open_world fills from policy season.drop_days
+    )
+
+    archived, opened = rollover_world(store, next_world, now=now)
+    if archived:
+        schedule_book_binding(archived.id)
+
+    return {
+        "archived": {
+            **_world_summary(archived),
+            "book_url": f"/world/{archived.id}/book",
+        }
+        if archived
+        else None,
+        "opened": _world_summary(opened),
     }
 
 
