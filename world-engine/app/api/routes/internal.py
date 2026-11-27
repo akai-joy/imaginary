@@ -15,7 +15,7 @@
 import logging
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -25,6 +25,8 @@ from app.api.services.atlas_runner import run_atlas
 from app.api.services.contribution_runner import run_contribution_job
 from app.api.services.finale import schedule_book_binding
 from app.api.services.showcase_runner import run_showcase
+from app.core.lifecycle import close_world, rollover_world, schedule_world, tick
+from app.core.types import World
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,6 @@ class RunShowcasePayload(BaseModel):
 def post_internal_run_showcase(payload: RunShowcasePayload):
     """Internal endpoint called to execute the showcase workflow for a tree."""
     store = deps.get_store()
-    from app.core.lifecycle import tick
 
     tick(store)
 
@@ -101,7 +102,6 @@ def post_internal_world_schedule(
     if closes_at and closes_at.tzinfo is None:
         closes_at = closes_at.replace(tzinfo=UTC)
 
-    from app.core.lifecycle import schedule_world
 
     w = schedule_world(store, target_id, opens_at=opens_at, closes_at=closes_at)
     if not w:
@@ -142,7 +142,6 @@ def post_internal_world_close(
     _user_id = deps.get_user_id_from_token(authorization)
     store = deps.get_store()
 
-    from app.core.lifecycle import close_world
 
     target_id = payload.world_id
     if not target_id:
@@ -185,10 +184,6 @@ def post_internal_world_open(
     _user_id = deps.get_user_id_from_token(authorization)
     store = deps.get_store()
 
-    from datetime import timedelta
-
-    from app.core.lifecycle import rollover_world
-    from app.core.types import World
 
     new_id = payload.world_id
     if not new_id:
@@ -229,7 +224,6 @@ def post_internal_world_open(
 def post_internal_tick(authorization: str | None = Header(None)):
     """POST /internal/tick -> advance the world lifecycle (close expired drops); internal cron hook."""
     store = deps.get_store()
-    from app.core.lifecycle import tick
 
     w = tick(store)
     return {

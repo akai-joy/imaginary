@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 
 from app.api.services.background import submit_once
+from app.book_compiler import write_book
 from app.core.store import CanonStore
 
 logger = logging.getLogger(__name__)
@@ -43,8 +44,6 @@ def bind_book(
     world_id: str, store: CanonStore | None = None, *, draft: bool = False
 ) -> Path:
     """Compile and cache the anthology for a world; returns the written path."""
-    from app.book_compiler import write_book
-
     path = write_book(
         out_path=book_path(world_id, draft=draft), world_id=world_id, store=store
     )

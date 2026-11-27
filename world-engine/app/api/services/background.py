@@ -22,11 +22,13 @@ non-daemon and their atexit hook would block interpreter shutdown while a
 long warm-up or showcase run is mid-flight.
 """
 
+import json
 import logging
 import os
 import queue
 import threading
 from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -84,3 +86,49 @@ def submit_once(key: str, fn: Callable[..., object], *args: object) -> bool:
     _ensure_workers()
     _task_queue.put((key, fn, args))
     return True
+
+
+def enqueue_cloud_task(
+    path: str, payload: dict[str, Any], *, log_label: str = ""
+) -> None:
+    """Enqueue an internal HTTP callback on Google Cloud Tasks (production async path)."""
+    from google.cloud import tasks_v2
+
+    project = os.getenv("GOOGLE_CLOUD_PROJECT")
+    location = os.getenv("CLOUD_TASKS_LOCATION", "us-central1")
+    queue_name = os.getenv("CLOUD_TASKS_QUEUE", "showcase-queue")
+
+    service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
+    if not service_url:
+        logger.warning(
+            "SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost."
+        )
+        service_url = "http://localhost:8000"
+
+    target_url = f"{service_url.rstrip('/')}/{path.lstrip('/')}"
+
+    client = tasks_v2.CloudTasksClient()
+    parent = client.queue_path(project, location, queue_name)
+
+    task: dict[str, Any] = {
+        "http_request": {
+            "http_method": tasks_v2.HttpMethod.POST,
+            "url": target_url,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(payload).encode("utf-8"),
+        }
+    }
+
+    service_account_email = os.getenv("CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL")
+    if service_account_email:
+        task["http_request"]["oidc_token"] = {
+            "service_account_email": service_account_email,
+            "audience": target_url,
+        }
+
+    logger.info(
+        "Enqueuing Cloud Tasks target=%s%s",
+        target_url,
+        f" ({log_label})" if log_label else "",
+    )
+    client.create_task(request={"parent": parent, "task": task})

@@ -12,11 +12,11 @@
 # limitations under the License.
 """Atlas illustration execution: inline runner + Cloud Tasks enqueue + local trigger."""
 
-import json
 import logging
-import os
 
-from app.api.services.background import is_local_dev, submit_once
+from app.agents.atlas_illustrator import atlas_node
+from app.api.services.background import enqueue_cloud_task, is_local_dev, submit_once
+from app.core.controller import cartography_controller_node
 from app.core.store import get_store
 
 logger = logging.getLogger(__name__)
@@ -35,9 +35,6 @@ def run_atlas(location_id: str) -> bool:
     Returns False (with a warning) if the location no longer exists; raises on
     execution failure so callers can surface it.
     """
-    from app.agents.atlas_illustrator import atlas_node
-    from app.core.controller import cartography_controller_node
-
     store = get_store()
     entry = store.get_canon_entry(location_id)
     if not entry:
@@ -53,44 +50,11 @@ def run_atlas(location_id: str) -> bool:
 
 def enqueue_atlas_task(location_id: str) -> None:
     """Enqueue the async Atlas-illustration workflow for a location on Cloud Tasks (the production async path)."""
-    from google.cloud import tasks_v2
-
-    project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    location = os.getenv("CLOUD_TASKS_LOCATION", "us-central1")
-    queue = os.getenv("CLOUD_TASKS_QUEUE", "showcase-queue")
-
-    service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
-    if not service_url:
-        logger.warning(
-            "SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost."
-        )
-        service_url = "http://localhost:8000"
-
-    target_url = f"{service_url.rstrip('/')}/internal/paint-atlas"
-
-    client = tasks_v2.CloudTasksClient()
-    parent = client.queue_path(project, location, queue)
-
-    task = {
-        "http_request": {
-            "http_method": tasks_v2.HttpMethod.POST,
-            "url": target_url,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"location_id": location_id}).encode("utf-8"),
-        }
-    }
-
-    service_account_email = os.getenv("CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL")
-    if service_account_email:
-        task["http_request"]["oidc_token"] = {
-            "service_account_email": service_account_email,
-            "audience": target_url,
-        }
-
-    logger.info(
-        "Enqueuing Cloud Tasks target=%s for location_id=%s", target_url, location_id
+    enqueue_cloud_task(
+        "/internal/paint-atlas",
+        {"location_id": location_id},
+        log_label=f"location_id={location_id}",
     )
-    client.create_task(request={"parent": parent, "task": task})
 
 
 def trigger_atlas_task(location_id: str) -> None:

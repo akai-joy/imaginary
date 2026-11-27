@@ -12,81 +12,54 @@
 # limitations under the License.
 """Showcase workflow execution: inline runner + Cloud Tasks enqueue + local trigger."""
 
-import json
 import logging
-import os
 
-from app.api.services.background import is_local_dev, submit_once
+from google.genai import types
+
+from app.api import deps
+from app.api.services.audio_warmer import warm_scene_audio
+from app.api.services.background import enqueue_cloud_task, is_local_dev, submit_once
+from app.core.runner_factory import create_runner
+from showcase.agent import app as showcase_app
 
 logger = logging.getLogger(__name__)
 
 
 def run_showcase() -> None:
     """Execute the showcase workflow once via the plugin-carrying Runner (raises on failure)."""
-    from google.adk.sessions import InMemorySessionService
-    from google.genai import types
-
-    from app.core.runner_factory import create_runner
-    from showcase.agent import app as showcase_app
-
-    session_service = InMemorySessionService()
+    session_service = deps.get_session_service()
     session = session_service.create_session_sync(user_id="system", app_name="showcase")
     runner = create_runner(showcase_app, session_service)
 
-    list(
-        runner.run(
-            new_message=types.Content(
-                role="user", parts=[types.Part.from_text(text="run")]
-            ),
-            user_id="system",
-            session_id=session.id,
+    try:
+        list(
+            runner.run(
+                new_message=types.Content(
+                    role="user", parts=[types.Part.from_text(text="run")]
+                ),
+                user_id="system",
+                session_id=session.id,
+            )
         )
-    )
+    finally:
+        try:
+            session_service.delete_session_sync(
+                app_name="showcase", user_id="system", session_id=session.id
+            )
+        except Exception:
+            pass
 
 
 def enqueue_showcase_task(tree_id: str) -> None:
     """Enqueue the showcase workflow for a tree on Cloud Tasks (the production async path)."""
-    from google.cloud import tasks_v2
-
-    project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    location = os.getenv("CLOUD_TASKS_LOCATION", "us-central1")
-    queue = os.getenv("CLOUD_TASKS_QUEUE", "showcase-queue")
-
-    service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
-    if not service_url:
-        logger.warning(
-            "SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost."
-        )
-        service_url = "http://localhost:8000"
-
-    target_url = f"{service_url.rstrip('/')}/internal/run-showcase"
-
-    client = tasks_v2.CloudTasksClient()
-    parent = client.queue_path(project, location, queue)
-
-    task = {
-        "http_request": {
-            "http_method": tasks_v2.HttpMethod.POST,
-            "url": target_url,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"tree_id": tree_id}).encode("utf-8"),
-        }
-    }
-
-    service_account_email = os.getenv("CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL")
-    if service_account_email:
-        task["http_request"]["oidc_token"] = {
-            "service_account_email": service_account_email,
-            "audience": target_url,
-        }
-
-    logger.info("Enqueuing Cloud Tasks target=%s for tree_id=%s", target_url, tree_id)
-    client.create_task(request={"parent": parent, "task": task})
+    enqueue_cloud_task(
+        "/internal/run-showcase",
+        {"tree_id": tree_id},
+        log_label=f"tree_id={tree_id}",
+    )
 
 
 def _run_showcase_local() -> None:
-    from app.api.services.audio_warmer import warm_scene_audio
-
     run_showcase()
     logger.info("Background showcase workflow executed successfully (local fallback).")
     warm_scene_audio()

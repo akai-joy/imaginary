@@ -13,10 +13,14 @@
 """World-facing routes: map, world summary, chronicle, codex, discovery."""
 
 from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+from app.agents.chronicler import build_chronicle
 from app.api import deps
-from app.core.types import DEFAULT_WORLD_ID, SEED_WORLD
+from app.api.services.finale import bind_book, book_path
+from app.core.lifecycle import is_window_open, seconds_remaining, tick
+from app.core.types import DEFAULT_WORLD_ID, SEED_WORLD, WorldStatus
 
 router = APIRouter()
 
@@ -92,7 +96,6 @@ def get_world_map(authorization: str | None = Header(None)):
 def get_world(authorization: str | None = Header(None)):
     """GET /world -> the active world summary (theme, opening line, status, and time remaining in the drop)."""
     store = deps.get_store()
-    from app.core.lifecycle import is_window_open, seconds_remaining, tick
 
     tick(store)
     active_w_id = deps.active_world_id()
@@ -123,7 +126,6 @@ def get_world_chronicle(authorization: str | None = Header(None)):
     the world's era evokes (shaman / bard / influencer / story-bot). Cached by
     world + canon count in the chronicler module, so re-opening the panel is instant.
     """
-    from app.agents.chronicler import build_chronicle
 
     store = deps.get_store()
     return build_chronicle(deps.resolve_active_world(), store)
@@ -135,10 +137,7 @@ def get_world_book(world_id: str):
 
     Archived worlds are immutable, so their bound book is compiled once and
     cached; an active world recompiles per request (Working Draft edition)."""
-    from fastapi.responses import HTMLResponse
 
-    from app.api.services.finale import bind_book, book_path
-    from app.core.types import WorldStatus
 
     store = deps.get_store()
     world = store.get_world(world_id)

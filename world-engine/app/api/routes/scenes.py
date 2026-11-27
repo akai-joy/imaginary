@@ -12,13 +12,20 @@
 # limitations under the License.
 """Scene-player routes: panel resolution for the explorable graph, incl. demo overrides."""
 
+import hashlib
 import logging
 import os
 
 from fastapi import APIRouter, HTTPException
 
+from app.agents.chronicler import (
+    _chronicle_config,
+    get_cached_speech_url,
+    select_persona,
+)
 from app.agents.showcase_tally import assemble_trees
 from app.api import deps
+from app.core.types import Storyboard
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +34,6 @@ router = APIRouter()
 
 def get_media_urls_for_scene(scene, media_type: str) -> tuple[str | None, str | None]:
     """Resolve cached comic/reel asset URLs for a storyboard scene by hashing its generation prompt (None until generated)."""
-    import hashlib
 
     prompt = (
         scene.optimized_prompt if scene.optimized_prompt else scene.visual_description
@@ -61,12 +67,6 @@ def attach_panel_audio(panels: list[dict]) -> list[dict]:
     if not panels:
         return panels
     try:
-        from app.agents.chronicler import (
-            _chronicle_config,
-            get_cached_speech_url,
-            select_persona,
-        )
-
         active_w = deps.resolve_active_world()
         config = _chronicle_config()
         _, persona = select_persona(active_w.theme, config)
@@ -316,7 +316,6 @@ def get_scene(scene_id: str):
             "choices": choices,
         }
 
-    from app.core.types import Storyboard
 
     # Reconstruct the tree containing this scene (within the entry's own world)
     # to find the ShowcaseJob and storyboard

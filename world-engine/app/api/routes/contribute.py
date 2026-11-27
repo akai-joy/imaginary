@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 from app.api import deps
 from app.api.services.contribution_runner import dispatch_contribution_job
+from app.core.lifecycle import is_window_open, tick
 from app.core.types import ContributionJob, ContributionJobStatus
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,6 @@ def post_contribute(
     user_id = deps.get_user_id_from_token(authorization, strict=True)
 
     store = deps.get_store()
-    from app.core.lifecycle import is_window_open, tick
 
     active_w = tick(store)
     if not active_w or not is_window_open(active_w):

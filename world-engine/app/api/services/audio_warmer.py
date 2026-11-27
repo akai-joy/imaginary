@@ -15,7 +15,14 @@
 import logging
 from collections.abc import Callable
 
+from app.agents.chronicler import (
+    _chronicle_config,
+    get_cached_speech_url,
+    select_persona,
+    synthesize_speech,
+)
 from app.api.services.background import submit_once
+from app.core.lifecycle import tick
 from app.core.store import get_store
 from app.core.types import DEFAULT_WORLD_ID, SEED_WORLD
 
@@ -35,13 +42,6 @@ def set_scene_provider(fn: Callable[[str], dict]) -> None:
 def warm_scene_audio() -> None:
     """Pre-generates TTS for all panel captions across all canon scenes."""
     try:
-        from app.agents.chronicler import (
-            _chronicle_config,
-            get_cached_speech_url,
-            select_persona,
-            synthesize_speech,
-        )
-
         if _scene_provider is None:
             logger.warning("Scene audio warming skipped: no scene provider registered.")
             return
@@ -54,8 +54,6 @@ def warm_scene_audio() -> None:
 
         logger.info("Starting background scene audio warmer...")
         store = get_store()
-
-        from app.core.lifecycle import tick
 
         active_w = tick(store)
         if not active_w:

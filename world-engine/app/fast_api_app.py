@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from google.adk.cli.fast_api import get_fast_api_app
 from google.cloud import logging as google_cloud_logging
 
+from app.api import deps
 from app.api.routes import canon, contribute, internal, scenes, showcase, world
 from app.api.services.audio_warmer import (
     schedule_scene_audio_warmup,
@@ -83,6 +84,7 @@ app: FastAPI = get_fast_api_app(
 )
 app.title = "world-engine"
 app.description = "API for interacting with the Agent world-engine"
+app.state.session_service = deps.initialise_session_service()
 
 # CORS middleware is automatically managed by get_fast_api_app using the allow_origins parameter
 
@@ -107,7 +109,11 @@ app.include_router(internal.router)
 def collect_feedback(feedback: Feedback) -> dict[str, str]:
     """Collect and log feedback."""
     if is_cloud_logging and gcp_logger:
-        gcp_logger.log_struct(feedback.model_dump(), severity="INFO")
+        try:
+            gcp_logger.log_struct(feedback.model_dump(), severity="INFO")
+        except Exception as exc:
+            logger.warning("Cloud Logging feedback write failed (%s); logging locally.", exc)
+            logger.info("Feedback: %s", feedback.model_dump())
     else:
         logger.info("Feedback: %s", feedback.model_dump())
     return {"status": "success"}

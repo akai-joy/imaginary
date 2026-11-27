@@ -15,6 +15,7 @@
 import json
 import logging
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -30,7 +31,15 @@ from requests.exceptions import RequestException
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BASE_URL = "http://127.0.0.1:8000"
+
+def _find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+SERVER_PORT = _find_free_port()
+BASE_URL = f"http://127.0.0.1:{SERVER_PORT}"
 STREAM_URL = BASE_URL + "/run_sse"
 FEEDBACK_URL = BASE_URL + "/feedback"
 
@@ -51,9 +60,9 @@ def start_server() -> subprocess.Popen[str]:
         "uvicorn",
         "app.fast_api_app:app",
         "--host",
-        "0.0.0.0",
+        "127.0.0.1",
         "--port",
-        "8000",
+        str(SERVER_PORT),
     ]
     env = os.environ.copy()
     env["INTEGRATION_TEST"] = "TRUE"
@@ -82,7 +91,7 @@ def wait_for_server(timeout: int = 90, interval: int = 1) -> bool:
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
-            response = requests.get("http://127.0.0.1:8000/docs", timeout=10)
+            response = requests.get(f"{BASE_URL}/docs", timeout=10)
             if response.status_code == 200:
                 logger.info("Server is ready")
                 return True

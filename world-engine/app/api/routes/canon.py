@@ -17,12 +17,14 @@ import os
 import uuid
 from datetime import UTC, datetime
 
+import yaml
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from app.agents.showcase_tally import assemble_trees
 from app.api import deps
 from app.api.services.showcase_runner import trigger_showcase_task
+from app.core.config import POLICY_PATH
 from app.core.types import Vote
 
 logger = logging.getLogger(__name__)
@@ -285,10 +287,6 @@ def post_vote(payload: VotePayload, authorization: str | None = Header(None)):
     all_votes = store.get_votes_for_tree(tree_id)
     vote_total = sum(v.weight for v in all_votes)
 
-    # 1. Fetch policy settings
-    import yaml
-
-    from app.core.config import POLICY_PATH
 
     min_votes = 10
     min_composite_score = 70.0

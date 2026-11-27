@@ -20,10 +20,15 @@ body in the cloud) — only status/verdict are persisted, never the id_token.
 
 import json
 import logging
-import os
 from datetime import UTC, datetime
 
-from app.api.services.background import is_local_dev, submit_once
+from google.genai import types
+
+from app.agent import app as agent_app
+from app.api import deps
+from app.api.services.atlas_runner import trigger_atlas_task
+from app.api.services.background import enqueue_cloud_task, is_local_dev, submit_once
+from app.core.runner_factory import create_runner
 from app.core.types import ContributionJobStatus
 
 logger = logging.getLogger(__name__)
@@ -44,14 +49,7 @@ def execute_contribution_pipeline(
 
     This is the exact logic the old synchronous POST /contribute inlined.
     """
-    from google.adk.sessions import InMemorySessionService
-    from google.genai import types
-
-    from app.agent import app as agent_app
-    from app.api.services.atlas_runner import trigger_atlas_task
-    from app.core.runner_factory import create_runner
-
-    session_service = InMemorySessionService()
+    session_service = deps.get_session_service()
     session = session_service.create_session_sync(user_id=user_id, app_name="app")
     runner = create_runner(agent_app, session_service)
 
@@ -161,12 +159,17 @@ def execute_contribution_pipeline(
                 "score": 0,
                 "message": f"Execution failed: {err_msg}",
             }
+    finally:
+        try:
+            session_service.delete_session_sync(
+                app_name="app", user_id=user_id, session_id=session.id
+            )
+        except Exception:
+            pass
 
 
 def run_contribution_job(job_id: str, pipeline_kwargs: dict) -> None:
     """Mark the job running, execute the pipeline, persist the verdict."""
-    from app.api import deps
-
     store = deps.get_store()
     job = store.get_contribution_job(job_id)
     if not job:
@@ -187,48 +190,11 @@ def run_contribution_job(job_id: str, pipeline_kwargs: dict) -> None:
 
 def enqueue_contribution_task(job_id: str, pipeline_kwargs: dict) -> None:
     """Enqueue the contribution pipeline on Cloud Tasks (the production async path)."""
-    from google.cloud import tasks_v2
-
-    project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    location = os.getenv("CLOUD_TASKS_LOCATION", "us-central1")
-    queue = os.getenv("CLOUD_TASKS_QUEUE", "showcase-queue")
-
-    service_url = os.getenv("SERVICE_URL") or os.getenv("PUBLIC_URL")
-    if not service_url:
-        logger.warning(
-            "SERVICE_URL or PUBLIC_URL env var not set. Defaulting callback URL to localhost."
-        )
-        service_url = "http://localhost:8000"
-
-    target_url = f"{service_url.rstrip('/')}/internal/run-contribution"
-
-    client = tasks_v2.CloudTasksClient()
-    parent = client.queue_path(project, location, queue)
-
-    task = {
-        "http_request": {
-            "http_method": tasks_v2.HttpMethod.POST,
-            "url": target_url,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(
-                {"job_id": job_id, "pipeline_kwargs": pipeline_kwargs}
-            ).encode("utf-8"),
-        }
-    }
-
-    service_account_email = os.getenv("CLOUD_TASKS_SERVICE_ACCOUNT_EMAIL")
-    if service_account_email:
-        task["http_request"]["oidc_token"] = {
-            "service_account_email": service_account_email,
-            "audience": target_url,
-        }
-
-    logger.info(
-        "Enqueuing Cloud Tasks target=%s for contribution job_id=%s",
-        target_url,
-        job_id,
+    enqueue_cloud_task(
+        "/internal/run-contribution",
+        {"job_id": job_id, "pipeline_kwargs": pipeline_kwargs},
+        log_label=f"contribution job_id={job_id}",
     )
-    client.create_task(request={"parent": parent, "task": task})
 
 
 def dispatch_contribution_job(job_id: str, pipeline_kwargs: dict) -> None:
@@ -242,8 +208,6 @@ def dispatch_contribution_job(job_id: str, pipeline_kwargs: dict) -> None:
             logger.error("Failed to enqueue contribution task: %s", e)
             # Fail the job now — otherwise it sits "queued" forever and the
             # client polls into its timeout instead of seeing an error.
-            from app.api import deps
-
             store = deps.get_store()
             job = store.get_contribution_job(job_id)
             if job:

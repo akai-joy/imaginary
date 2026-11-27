@@ -20,13 +20,54 @@ every router sees the patched version.
 
 import logging
 import os
+import threading
 
 from fastapi import HTTPException
+from google.adk.sessions import InMemorySessionService
 
+from app.core.lifecycle import tick
 from app.core.store import get_store
 from app.core.types import DEFAULT_WORLD_ID, SEED_WORLD, World
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Singleton session service — shared across all requests
+# ---------------------------------------------------------------------------
+
+_session_service: InMemorySessionService | None = None
+_session_service_lock = threading.Lock()
+
+
+def get_session_service() -> InMemorySessionService:
+    """Return the singleton session service, creating it lazily if needed."""
+    global _session_service
+    if _session_service is None:
+        with _session_service_lock:
+            if _session_service is None:
+                _session_service = InMemorySessionService()
+    return _session_service
+
+
+def initialise_session_service() -> InMemorySessionService:
+    """Create and register the singleton session service at application startup."""
+    global _session_service
+    with _session_service_lock:
+        _session_service = InMemorySessionService()
+        return _session_service
+
+
+def reset_session_service() -> None:
+    """Clear the singleton session service (useful for tests)."""
+    global _session_service
+    with _session_service_lock:
+        _session_service = None
+
+
+# ---------------------------------------------------------------------------
+# Authentication helpers
+# ---------------------------------------------------------------------------
 
 
 def get_user_id_from_token(authorization: str | None, strict: bool = False) -> str:
@@ -79,8 +120,6 @@ def get_user_id_from_token(authorization: str | None, strict: bool = False) -> s
 
 def active_world_id() -> str:
     """Resolve which world to serve: advance the lifecycle, else fall back to the newest world (or the default seed)."""
-    from app.core.lifecycle import tick
-
     store = get_store()
     w = tick(store)
     if w:

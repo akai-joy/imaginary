@@ -342,11 +342,11 @@ def test_contribute_endpoint_payload(client, monkeypatch):
             return []  # Return empty list of events for success
 
     monkeypatch.setattr(
-        "google.adk.sessions.InMemorySessionService", MockSessionService
+        "app.api.deps.get_session_service", lambda: MockSessionService()
     )
-    # Since create_runner is imported and called inside post_contribute, let's mock it
     monkeypatch.setattr(
-        "app.core.runner_factory.create_runner", lambda app, service: MockRunner()
+        "app.api.services.contribution_runner.create_runner",
+        lambda app, service: MockRunner(),
     )
 
     payload = {
